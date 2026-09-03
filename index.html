@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Real-Time Robotic Portrait Drawing System</title>
+    <meta
+      name="description"
+      content="Capstone project page for a real-time robotic portrait drawing system."
+    >
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="project-header">
+        <p class="eyebrow">Capstone Project</p>
+        <h1>Real-Time Robotic Portrait Drawing System</h1>
+        <p class="team-line">By Jacqueline Mei, Luna Liu, Yi Ji</p>
+        <p class="supervisor-line">Supervised by: Farhad Farokhi</p>
+      </header>
+
+      <section class="showcase" aria-label="Project showcase">
+        <article class="video-panel">
+          <div class="section-label">Project Video</div>
+          <video class="project-video" controls preload="metadata">
+            <source src="capstone_video.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+          </video>
+        </article>
+
+        <article class="pipeline-panel">
+          <div class="section-label">System Pipeline</div>
+          <img
+            class="pipeline-image"
+            src="pipeline.png"
+            alt="Pipeline showing photo capture, image processing, sketch conversion, drawing path, robot planning, control, and robot drawing."
+          >
+          <p class="project-description">
+            Imagine taking a photo and watching a robot turn it into a drawing right in front of you.
+            Our system transforms digital images into sketch paths, then guides a robotic arm to recreate
+            the portrait on paper as a unique physical artwork.
+          </p>
+        </article>
+      </section>
+
+      <section class="action-strip" aria-label="Voting and QR code">
+        <a id="vote-link" class="vote-link" href="#" aria-disabled="true">Vote for Us!</a>
+
+        <div class="qr-block">
+          <img id="site-qr" class="qr-code" alt="QR code to open this project website">
+          <div>
+            <p class="qr-title">Scan to open this website</p>
+            <p id="site-url" class="site-url">Loading website link...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
