@@ -1,0 +1,1556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Real-Time Robotic Portrait Drawing System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Capstone project page for a real-time robotic portrait drawing system.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  /* Layout: a product page. A centred white hero with the title, a black full-screen scene where the
+     pink arm draws as you scroll, the film on black, the pipeline diagram on light grey, then the vote. Colour
+     comes only from the arm's pink and the ink's gold, joined in one gradient for the headline. */
+  :root {
+    --white: #ffffff;
+    --gray: #f5f5f7;
+    --ink: #1d1d1f;
+    --muted: #6e6e73;
+    --blue: #0071e3;
+    --black: #000000;
+    --on-black: #f5f5f7;
+    --muted-dark: #86868b;
+    --grad: linear-gradient(90deg, #f0907d 0%, #e59c5c 52%, #c99724 100%);
+    --f: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { background: var(--white); }
+  body {
+    margin: 0;
+    background: var(--white);
+    color: var(--ink);
+    font: 400 17px/1.47 var(--f);
+    letter-spacing: -0.022em;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 6px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .gutter {
+    padding-left: max(22px, env(safe-area-inset-left, 0px));
+    padding-right: max(22px, env(safe-area-inset-right, 0px));
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  /* local nav, frosted */
+  body::before { content: ''; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: rgba(251, 251, 253, 0.85); }
+  .localnav {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 9;
+    background: rgba(251, 251, 253, 0.8);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    transition: background-color 0.3s, border-color 0.3s;
+  }
+  .localnav.dark { background: rgba(22, 22, 23, 0.8); border-bottom-color: rgba(255, 255, 255, 0.12); }
+  .localnav.dark .name, .localnav.dark nav a:not(.pill) { color: var(--on-black); }
+  .localnav .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 52px; }
+  .localnav .name { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .localnav nav { display: flex; align-items: center; gap: 22px; font-size: 12px; letter-spacing: -0.01em; }
+  .localnav nav a { color: var(--ink); opacity: 0.85; }
+  .localnav nav a:hover { opacity: 1; text-decoration: none; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 11px 22px;
+    border-radius: 980px;
+    background: var(--blue);
+    color: #fff;
+    font: 400 17px/1 var(--f);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+  .pill:hover { background: #0077ed; text-decoration: none; }
+  .pill.small { padding: 5px 12px; font-size: 12px; opacity: 1 !important; color: #fff !important; }
+  .pill[aria-disabled="true"] { cursor: not-allowed; }
+  .more { font-size: 19px; }
+  .more::after { content: ' ›'; }
+
+  /* hero */
+  .hero { text-align: center; padding-block: clamp(70px, 11vw, 130px) clamp(60px, 9vw, 110px); }
+  .hero .eyebrow { margin: 0 0 14px; font-size: clamp(17px, 1.8vw, 21px); font-weight: 600; color: var(--muted); letter-spacing: -0.01em; }
+  .hero h1 {
+    margin: 0 auto;
+    max-width: 15ch;
+    font-size: clamp(44px, 7.6vw, 96px);
+    line-height: 1.04;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+  .hero .tagline { margin: 22px 0 0; font-size: clamp(28px, 4vw, 48px); line-height: 1.1; font-weight: 600; letter-spacing: -0.025em; }
+  .hero .sub { margin: 18px auto 0; max-width: 34ch; font-size: clamp(19px, 1.9vw, 24px); line-height: 1.35; color: var(--muted); letter-spacing: -0.015em; }
+  .ctas { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 18px 34px; margin-top: 34px; }
+  .byline { margin: 38px 0 0; font-size: 14px; color: var(--muted); }
+  .hint { display: block; margin-top: 46px; font-size: 13px; color: var(--muted); }
+  .hint::after { content: ''; display: block; width: 9px; height: 9px; margin: 10px auto 0; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+
+  /* the drawing scene: plays by itself once it is on screen */
+  .scrolly { position: relative; background: var(--black); color: var(--on-black); }
+  .scene { position: relative; height: 100vh; height: 100svh; min-height: 600px; max-height: 1000px; overflow: hidden; }
+  .replay {
+    position: absolute;
+    right: max(22px, env(safe-area-inset-right, 0px));
+    bottom: 22px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 16px 9px 14px;
+    border: 0;
+    border-radius: 980px;
+    background: rgba(255, 255, 255, 0.14);
+    color: var(--on-black);
+    font: 400 14px var(--f);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .replay:hover { background: rgba(255, 255, 255, 0.22); }
+  .replay svg { width: 14px; height: 14px; }
+  .scene .stage { position: absolute; inset: 0; }
+  .scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .caps { position: absolute; left: 0; right: 0; top: 0; z-index: 2; height: 30%; pointer-events: none; text-align: center; }
+  .cap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 56px 22px 0;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .cap.on { opacity: 1; transform: none; transition: opacity 0.5s ease 0.18s, transform 0.5s ease 0.18s; }
+  .cap h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); line-height: 1.06; font-weight: 700; letter-spacing: -0.03em; text-wrap: balance; }
+  .cap p { margin: 10px auto 0; max-width: 36ch; font-size: clamp(17px, 1.7vw, 21px); line-height: 1.38; color: var(--muted-dark); }
+
+  /* film */
+  .film { background: var(--black); color: var(--on-black); text-align: center; padding-block: 40px 130px; }
+  .film h2, .vote h2 { margin: 0; font-size: clamp(40px, 6vw, 80px); line-height: 1.05; font-weight: 700; letter-spacing: -0.035em; text-wrap: balance; }
+  .film p.sub { margin: 14px auto 0; max-width: 40ch; font-size: clamp(19px, 1.9vw, 24px); line-height: 1.35; color: var(--muted-dark); }
+  .film video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; margin: 48px auto 0; border-radius: 28px; background: #111; }
+
+  /* pipeline: the team's own diagram and paragraph, unchanged, on a white panel */
+  .pipeline { background: var(--gray); padding-block: 120px; text-align: center; }
+  .eyebrow { margin: 0 0 28px; font-size: 14px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .pipe { max-width: 1180px; margin: 0 auto; padding: clamp(14px, 2.4vw, 32px); border-radius: 28px; background: var(--white); min-width: 0; }
+  .pipe-scroll { overflow-x: auto; border-radius: 12px; }
+  .pipe-scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+  .pipe img { display: block; width: 100%; height: auto; }
+  .pipe-text { margin: 48px auto 0; max-width: 34ch; font-size: clamp(21px, 2.4vw, 30px); line-height: 1.35; font-weight: 600; letter-spacing: -0.015em; text-wrap: pretty; }
+
+  /* vote */
+  .vote { text-align: center; padding-block: 130px 120px; }
+  .vote p.sub { margin: 16px auto 0; max-width: 36ch; font-size: clamp(19px, 1.9vw, 24px); line-height: 1.35; color: var(--muted); }
+  .qr { display: inline-flex; align-items: center; gap: 22px; margin-top: 52px; padding: 22px 28px 22px 22px; border-radius: 28px; background: var(--gray); text-align: left; max-width: 100%; }
+  .qr-box { flex: none; display: grid; place-items: center; width: 132px; height: 132px; padding: 10px; border-radius: 16px; background: var(--white); }
+  .qr-box svg { display: block; width: 100%; height: 100%; }
+  .qr-box.empty { border: 1px dashed #c7c7cc; font-size: 11px; line-height: 1.35; color: var(--muted); text-align: center; }
+  .qr p { margin: 0; }
+  .qr .t { font-size: 19px; font-weight: 600; }
+  .qr .url { margin-top: 6px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; max-width: 260px; }
+
+  footer { background: var(--gray); padding-block: 22px 34px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; padding-top: 16px; border-top: 1px solid #d2d2d7; }
+
+  @media (max-width: 640px) {
+    .localnav nav a:not(.pill) { display: none; }
+    /* the diagram's labels are too small to read at phone width, so it keeps a readable size and scrolls */
+    .pipe img { width: 760px; max-width: none; }
+    .qr { flex-direction: column; align-items: flex-start; }
+    .caps { height: 34%; }
+  }
+  /* reduced motion: no animation; the finished drawing sits under the captions */
+  @media (prefers-reduced-motion: reduce) {
+    .scene { height: auto; min-height: 0; max-height: none; overflow: visible; }
+    .caps { position: relative; height: auto; padding-block: 90px 10px; }
+    .cap { position: relative; opacity: 1; transform: none; padding: 0 22px 28px; }
+    .scene .stage { position: relative; height: 72vh; }
+    .cap { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+
+<header class="localnav gutter" id="localnav">
+  <div class="wrap">
+    <span class="name">Portrait Drawing Robot</span>
+    <nav aria-label="Sections">
+      <a href="#draw">Overview</a>
+      <a href="#film">Film</a>
+      <a href="#how">How it works</a>
+      <a class="pill small" href="#vote">Vote</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero gutter">
+    <p class="eyebrow">Capstone Project</p>
+    <h1 id="siteTitle">Real-Time Robotic Portrait Drawing System</h1>
+    <p class="tagline"><span class="grad">Your face. Drawn live.</span></p>
+    <p class="sub">Sit for a photo. Watch technology turn your expression into a one-of-a-kind line portrait.</p>
+    <div class="ctas">
+      <a class="pill" href="#vote">Vote for us</a>
+      <a class="more" href="#film">Watch the film</a>
+    </div>
+    <p class="byline">By Jacqueline Mei, Luna Liu, Yi Ji · Supervised by Farhad Farokhi</p>
+    <span class="hint">Scroll to watch it draw</span>
+  </section>
+
+  <section class="scrolly" id="draw" aria-label="The arm drawing a cartoon portrait">
+    <div class="scene">
+      <div class="caps">
+        <div class="cap on"><h2>Meet the artist.</h2><p>A 3-DOF robotic arm, printed in pink.</p></div>
+        <div class="cap"><h2>One line at a time.</h2><p>A real pen follows the plotted path.</p></div>
+        <div class="cap"><h2>Every stroke, planned.</h2><p>The drawing becomes a path before the pen ever touches the paper.</p></div>
+        <div class="cap"><h2><span class="grad">Say cheese.</span></h2><p>The same path our robot drew on paper. A photo in, a one-of-a-kind drawing out.</p></div>
+      </div>
+      <div class="stage" id="stage"></div>
+      <button class="replay" type="button" id="replayDraw" hidden>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Replay
+      </button>
+    </div>
+  </section>
+
+  <section class="film gutter" id="film">
+    <div class="wrap">
+      <h2>Watch the film.</h2>
+      <p class="sub">Twenty-four seconds, from the ring light to the take-home postcard.</p>
+      <video controls playsinline preload="metadata" poster="media/video-poster.jpg">
+        <source src="media/capstone_video.mp4" type="video/mp4">
+        Your browser cannot play this video.
+      </video>
+    </div>
+  </section>
+
+  <section class="pipeline gutter" id="how">
+    <p class="eyebrow">System Pipeline</p>
+    <div class="pipe">
+      <div class="pipe-scroll" tabindex="0" aria-label="Pipeline diagram, scrolls sideways on small screens">
+        <img src="media/pipeline.webp" width="1672" height="941" alt="Pipeline showing photo capture, image processing, sketch conversion, drawing path, robot planning, control, and robot drawing.">
+      </div>
+    </div>
+    <p class="pipe-text">Imagine taking a photo and watching a robot turn it into a drawing right in front of you. Our system transforms digital images into sketch paths, then guides a robotic arm to recreate the portrait on paper as a unique physical artwork.</p>
+  </section>
+
+  <section class="vote gutter" id="vote">
+    <h2>Your portrait. <span class="grad">Your vote.</span></h2>
+    <p class="sub">Keep the drawing. Scan the voting QR printed on the real postcard. Come sit for yours.</p>
+    <div class="ctas"><a class="pill" id="voteLink" href="#" aria-disabled="true">Vote for us</a></div>
+    <div class="qr">
+      <div class="qr-box" id="qr" aria-label="QR code that opens this website"></div>
+      <div>
+        <p class="t">Scan to open this website</p>
+        <p class="url" id="siteUrl"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="gutter">
+  <div class="wrap">
+    <span>Real-Time Robotic Portrait Drawing System. A capstone project by Jacqueline Mei, Luna Liu and Yi Ji, supervised by Farhad Farokhi.</span>
+    <a href="https://github.com/JiayueLiu1208/capstone-EM-12-FFAR-020">Source on GitHub</a>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*
+ * plotter.js: the shared drawing engine behind every version of the site.
+ *
+ *   text ─▶ single-stroke font ─▶ ordered strokes ─▶ timeline ─▶ inverse kinematics ─▶ canvas
+ *
+ * Each page supplies its own geometry and renderers (background, ink, arm); the engine owns
+ * the font, the motion plan, the kinematics, and the animation loop.
+ */
+(function (root) {
+  'use strict';
+
+  const TAU = Math.PI * 2;
+  const D2R = Math.PI / 180;
+  const hyp = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  /* ── Single-stroke font ─────────────────────────────────────────────────────────────
+   * Cap height is 10 units and y grows downward (0 = cap line, 10 = baseline).
+   * Each glyph is [advance width, ...strokes]. A stroke is a list of tokens:
+   *   "x,y"                  a point
+   *   "@cx,cy,rx,ry,a0,a1"   an elliptical arc sampled from angle a0 to a1 (degrees)
+   */
+  const DOT = (x, y) => `@${x},${y},0.38,0.38,0,360`;
+  const GLYPHS = {
+    A: [7, '0,10 3.5,0 7,10', '1.3,6.5 5.7,6.5'],
+    B: [6.5, '0,10 0,0 3.5,0 @3.5,2.5,2.5,2.5,-90,90 0,5', '0,5 4,5 @4,7.5,2.5,2.5,-90,90 0,10'],
+    C: [6.2, '@3.5,5,3.5,5,-42,-318'],
+    D: [6.5, '0,0 0,10 2.5,10 @2.5,5,4,5,90,-90 0,0'],
+    E: [5.5, '5.5,0 0,0 0,10 5.5,10', '0,5 4.5,5'],
+    F: [5.5, '5.5,0 0,0 0,10', '0,5 4.5,5'],
+    G: [7, '@3.5,5,3.5,5,-42,-360 4,5'],
+    H: [6, '0,0 0,10', '6,0 6,10', '0,5 6,5'],
+    I: [0, '0,0 0,10'],
+    J: [5, '5,0 5,7.2 @2.5,7.2,2.5,2.8,0,180'],
+    K: [6, '0,0 0,10', '6,0 0,6.2', '2.1,4.1 6,10'],
+    L: [5, '0,0 0,10 5,10'],
+    M: [7.5, '0,10 0,0 3.75,7 7.5,0 7.5,10'],
+    N: [6, '0,10 0,0 6,10 6,0'],
+    O: [7, '@3.5,5,3.5,5,-90,270'],
+    P: [6, '0,10 0,0 3.5,0 @3.5,2.75,2.5,2.75,-90,90 0,5.5'],
+    Q: [7, '@3.5,5,3.5,5,-90,270', '4.3,7.3 7,10.2'],
+    R: [6, '0,10 0,0 3.5,0 @3.5,2.75,2.5,2.75,-90,90 0,5.5', '3.2,5.5 6,10'],
+    S: [6, '@3,2.5,2.8,2.5,-15,-270 @3,7.5,3,2.5,-90,165'],
+    T: [6, '0,0 6,0', '3,0 3,10'],
+    U: [6, '0,0 0,7 @3,7,3,3,180,0 6,0'],
+    V: [7, '0,0 3.5,10 7,0'],
+    W: [9.5, '0,0 2.3,10 4.75,2.5 7.2,10 9.5,0'],
+    X: [6.5, '0,0 6.5,10', '6.5,0 0,10'],
+    Y: [6.5, '0,0 3.25,5 6.5,0', '3.25,5 3.25,10'],
+    Z: [6, '0,0 6,0 0,10 6,10'],
+    0: [6, '@3,5,3,5,-90,270'],
+    1: [3, '0.6,2.2 3,0 3,10'],
+    2: [6, '@3,3,3,3,-165,20 0,10 6,10'],
+    3: [6, '@3,2.5,2.8,2.5,-160,90 @3,7.5,3,2.5,-90,160'],
+    4: [6.5, '4.5,10 4.5,0 0,7 6.5,7'],
+    5: [6, '5.6,0 0.8,0 0.4,4.6 @3,6.9,3,3.1,-140,150'],
+    6: [6, '@3.3,5,3.1,5,-55,-180 0.2,7 @3,7,2.8,3,180,540'],
+    7: [6, '0,0 6,0 2.2,10'],
+    8: [6, '@3,2.6,2.6,2.4,90,450 @3,7.5,3,2.5,-90,270'],
+    9: [6, '@3,3,2.8,3,0,360 5.8,5 @3,5,2.8,5,0,125'],
+    ' ': [4.5],
+    '-': [4, '0,5.5 4,5.5'],
+    '_': [6, '0,10.6 6,10.6'],
+    '.': [0.8, DOT(0.4, 9.6)],
+    ',': [1, '0.8,9.2 0,11.6'],
+    '!': [0.8, '0.4,0 0.4,7', DOT(0.4, 9.6)],
+    '?': [5, '@2.5,2.5,2.5,2.5,-170,90 2.5,7', DOT(2.5, 9.6)],
+    "'": [0, '0,0 0,2.8'],
+    ':': [0.8, DOT(0.4, 3.6), DOT(0.4, 9.6)],
+    '/': [5, '0,10.5 5,-0.5'],
+    '+': [5, '0,5.5 5,5.5', '2.5,3 2.5,8'],
+    '=': [5, '0,4 5,4', '0,7 5,7'],
+    '(': [2, '@4.5,5,4.5,6.5,-130,-230'],
+    ')': [2, '@-2.5,5,4.5,6.5,-50,50'],
+    '#': [6.5, '2,0 1,10', '5.5,0 4.5,10', '0,3.5 6.5,3.5', '0,6.5 6.5,6.5']
+  };
+
+  function parseStroke(src) {
+    const raw = [];
+    for (const tok of src.trim().split(/\s+/)) {
+      if (tok[0] === '@') {
+        const [cx, cy, rx, ry, a0, a1] = tok.slice(1).split(',').map(Number);
+        const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 7));
+        for (let i = 0; i <= n; i++) {
+          const a = (a0 + ((a1 - a0) * i) / n) * D2R;
+          raw.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+        }
+      } else {
+        const [x, y] = tok.split(',').map(Number);
+        raw.push({ x, y });
+      }
+    }
+    const pts = [raw[0]];
+    for (let i = 1; i < raw.length; i++) if (hyp(raw[i], pts[pts.length - 1]) > 1e-4) pts.push(raw[i]);
+    return pts;
+  }
+
+  const FONT = {};
+  for (const ch in GLYPHS) {
+    const [w, ...strokes] = GLYPHS[ch];
+    FONT[ch] = { w, strokes: strokes.map(parseStroke) };
+  }
+
+  const normalize = (text) =>
+    String(text).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const glyph = (ch) => FONT[ch] || FONT[' '];
+
+  function measure(s, tracking) {
+    let w = 0;
+    for (const ch of s) w += glyph(ch).w + tracking;
+    return Math.max(0, w - tracking);
+  }
+
+  /* Lay text out in font units, wrapping on spaces when a line would pass maxWidth. */
+  function layoutText(text, { maxWidth = Infinity, tracking = 2.4, lineGap = 7 } = {}) {
+    const clean = normalize(text) || ' ';
+    const lines = [];
+    let line = '';
+    for (const word of clean.split(' ')) {
+      const cand = line ? line + ' ' + word : word;
+      if (line && measure(cand, tracking) > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else line = cand;
+    }
+    lines.push(line);
+
+    const widths = lines.map((l) => measure(l, tracking));
+    const width = Math.max(1, ...widths);
+    const strokes = [];
+    let ci = 0;
+    lines.forEach((l, li) => {
+      let x = (width - widths[li]) / 2;
+      const y0 = li * (10 + lineGap);
+      for (const ch of l) {
+        for (const s of glyph(ch).strokes) {
+          strokes.push({ pts: s.map((p) => ({ x: p.x + x, y: p.y + y0 })), ch: ci, glyph: ch });
+        }
+        x += glyph(ch).w + tracking;
+        ci++;
+      }
+      ci++; // the space that the line break replaced
+    });
+    return { text: clean, lines, strokes, width, height: lines.length * 10 + (lines.length - 1) * lineGap };
+  }
+
+  /* A picture instead of text: stroke strings in the same token syntax as the font, drawn in the
+     given order. The result is a layout, so it plans and plots exactly like a word. */
+  /* A drawing is drawn as listed: stroke by stroke, each in its own direction (fixed).
+     opts.size rescales so the longer side measures that many units, e.g. for pixel data. */
+  function drawingLayout(defs, name = 'drawing', opts = {}) {
+    const strokes = defs.map((d, i) => ({ pts: parseStroke(d), ch: i, glyph: '', fixed: true }));
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const s of strokes) for (const p of s.pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+    const k = opts.size ? opts.size / Math.max(x1 - x0, y1 - y0) : 1;
+    for (const s of strokes) s.pts = s.pts.map((p) => ({ x: (p.x - x0) * k, y: (p.y - y0) * k }));
+    return { text: name, lines: [name], strokes, width: (x1 - x0) * k, height: (y1 - y0) * k };
+  }
+
+  /* Keep letters in reading order; inside a letter, pick the nearest stroke end next,
+     reversing a stroke when its far end is closer (what a real plotter's planner does). */
+  function orderStrokes(strokes) {
+    const out = [];
+    let pen = { x: 0, y: 10 };
+    for (let i = 0; i < strokes.length; ) {
+      let j = i;
+      while (j < strokes.length && strokes[j].ch === strokes[i].ch) j++;
+      const group = strokes.slice(i, j);
+      while (group.length) {
+        let best = 0, bestD = Infinity, flip = false;
+        group.forEach((s, k) => {
+          const da = hyp(pen, s.pts[0]);
+          const db = hyp(pen, s.pts[s.pts.length - 1]);
+          if (da < bestD) { bestD = da; best = k; flip = false; }
+          if (!s.fixed && db < bestD - 1e-6) { bestD = db; best = k; flip = true; }
+        });
+        const s = group.splice(best, 1)[0];
+        const pts = flip ? s.pts.slice().reverse() : s.pts;
+        const cum = [0];
+        for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + hyp(pts[k - 1], pts[k]));
+        out.push({ ...s, pts, cum, len: cum[cum.length - 1] });
+        pen = pts[pts.length - 1];
+      }
+      i = j;
+    }
+    return out;
+  }
+
+  /* ── Motion plan ────────────────────────────────────────────────────────────────────
+   * Segments: wait / move (pen up, joint-space) / down / draw (pen down, Cartesian) / up.
+   * Durations are in font units, so the plan survives a resize unchanged. */
+  const HOME = { home: true };
+
+  function buildPlan(layout, opts = {}) {
+    const strokes = orderStrokes(layout.strokes);
+    const segs = [];
+    const add = (seg) => { segs.push(seg); return seg; };
+    add({ k: 'wait', dur: opts.startDelay ?? 0.5, at: HOME });
+    let from = HOME, si = 0;
+    for (const s of strokes) {
+      const a = s.pts[0];
+      const dist = from === HOME ? 40 : hyp(from, a);
+      add({ k: 'move', dur: 0.06 + 0.06 * Math.sqrt(dist), from, to: a, mid: true });
+      add({ k: 'down', dur: 0.07, at: a, stroke: s, si, mid: true });
+      add({ k: 'draw', dur: s.len / 30, stroke: s, si, mid: true });
+      add({ k: 'up', dur: 0.07, at: s.pts[s.pts.length - 1], stroke: s, si, mid: true });
+      from = s.pts[s.pts.length - 1];
+      si++;
+    }
+    add({ k: 'move', dur: 1.1, from, to: HOME, last: true });
+
+    // Rescale the writing part so a word takes a watchable amount of time.
+    const chars = layout.text.replace(/ /g, '').length || 1;
+    const rawMid = segs.reduce((s, g) => s + (g.mid ? g.dur : 0), 0) || 1;
+    const target = opts.duration ? opts.duration(chars) : clamp(3.5 + 0.55 * chars, 4, 13);
+    const f = clamp(target / rawMid, 0.3, 1.4);
+    let t = 0;
+    for (const g of segs) {
+      if (g.mid) g.dur *= f;
+      g.t0 = t;
+      t += g.dur;
+    }
+    const totalLen = strokes.reduce((s, k) => s + k.len, 0);
+    let acc = 0;
+    for (const g of segs) if (g.k === 'draw') { g.len0 = acc; acc += g.stroke.len; }
+    return { segs, strokes, total: t, totalLen, layout, speed: 30 / f };
+  }
+
+  function pointAt(stroke, d) {
+    const { pts, cum } = stroke;
+    if (d <= 0) return { x: pts[0].x, y: pts[0].y, i: 0 };
+    if (d >= stroke.len) { const p = pts[pts.length - 1]; return { x: p.x, y: p.y, i: pts.length - 1 }; }
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= d) lo = m; else hi = m; }
+    const u = (d - cum[lo]) / (cum[hi] - cum[lo] || 1);
+    return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * u, y: pts[lo].y + (pts[hi].y - pts[lo].y) * u, i: lo };
+  }
+
+  /* Polyline along a stroke from distance d0 to d1, including the vertices in between. */
+  function slice(stroke, d0, d1) {
+    const a = pointAt(stroke, d0), b = pointAt(stroke, d1);
+    const out = [{ x: a.x, y: a.y }];
+    for (let i = a.i + 1; i <= b.i; i++) if (stroke.cum[i] > d0 && stroke.cum[i] < d1) out.push(stroke.pts[i]);
+    out.push({ x: b.x, y: b.y });
+    return out;
+  }
+
+  /* ── Kinematics ─────────────────────────────────────────────────────────────────────
+   * Screen coordinates (y down). a1 is the shoulder angle, a2 the elbow angle relative
+   * to link 1, phi the absolute tool direction (wrist → pen tip) when a tool is present. */
+  function ik2(L1, L2, dx, dy, elbow) {
+    const c = clamp((dx * dx + dy * dy - L1 * L1 - L2 * L2) / (2 * L1 * L2), -1, 1);
+    const a2 = elbow * Math.acos(c);
+    const a1 = Math.atan2(dy, dx) - Math.atan2(L2 * Math.sin(a2), L1 + L2 * Math.cos(a2));
+    return { a1, a2 };
+  }
+
+  function solve(geom, tip) {
+    let phi = 0, w = tip;
+    if (geom.tool) {
+      phi = geom.tool.angle(tip, geom);
+      w = { x: tip.x - geom.tool.len * Math.cos(phi), y: tip.y - geom.tool.len * Math.sin(phi) };
+    }
+    const j = ik2(geom.L1, geom.L2, w.x - geom.base.x, w.y - geom.base.y, geom.elbow);
+    j.phi = phi;
+    return j;
+  }
+
+  function fk(geom, j, out) {
+    const { base, L1, L2 } = geom;
+    out.elbow = { x: base.x + L1 * Math.cos(j.a1), y: base.y + L1 * Math.sin(j.a1) };
+    out.wrist = { x: out.elbow.x + L2 * Math.cos(j.a1 + j.a2), y: out.elbow.y + L2 * Math.sin(j.a1 + j.a2) };
+    out.tip = geom.tool
+      ? { x: out.wrist.x + geom.tool.len * Math.cos(j.phi), y: out.wrist.y + geom.tool.len * Math.sin(j.phi) }
+      : out.wrist;
+    return out;
+  }
+
+  const unwrapTo = (a, ref) => a + TAU * Math.round((ref - a) / TAU);
+  const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1));
+
+  /* A sensible default layout: text across the upper part of the stage, arm base below it,
+     link lengths sized so every letter is in reach with the elbow still bent. */
+  function standardGeometry(W, H, box, o = {}) {
+    const maxTW = Math.min(W * (o.textWidth ?? 0.84), o.maxTextPx ?? 980);
+    const maxTH = H * (o.textHeight ?? 0.3);
+    const scale = Math.min(maxTW / box.width, maxTH / box.height);
+    const tw = box.width * scale, th = box.height * scale;
+    const cx = W * (o.textX ?? 0.5), cy = H * (o.textY ?? 0.36);
+    const ox = cx - tw / 2, oy = cy - th / 2;
+    const base = { x: W * (o.baseX ?? 0.5), y: H - (o.baseInset ?? 40) };
+    const geom = { W, H, scale, ox, oy, tw, th, base, elbow: o.elbow ?? 1 };
+    geom.px = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+
+    let far = 0;
+    const corners = [[ox, oy], [ox + tw, oy], [ox, oy + th], [ox + tw, oy + th]];
+    for (const [x, y] of corners) far = Math.max(far, Math.hypot(x - base.x, y - base.y));
+    if (o.tool) {
+      geom.tool = { len: far * o.tool.len, angle: o.tool.angle };
+      far = 0;
+      for (const [x, y] of corners) {
+        const phi = o.tool.angle({ x, y }, geom);
+        far = Math.max(far, Math.hypot(x - geom.tool.len * Math.cos(phi) - base.x, y - geom.tool.len * Math.sin(phi) - base.y));
+      }
+    }
+    const reach = far * (o.reach ?? 1.1);
+    geom.reach = reach;
+    geom.L1 = reach * (o.split ?? 0.53);
+    geom.L2 = reach - geom.L1;
+    geom.home = { x: base.x + reach * (o.homeX ?? 0.3), y: base.y - reach * (o.homeY ?? 0.42) };
+    return geom;
+  }
+
+  /* ── Articulated arm (base yaw, shoulder, elbow, wrist) ──────────────────────────────
+   * Millimetres; x to the right, y forward from the base, z up. The wrist keeps the pen vertical
+   * and the pen lifts by moving the whole arm up in z. The links are equal and the pen hangs
+   * Lt = h0 below the wrist, so with the pen on the paper the wrist is level with the shoulder:
+   * the arm is an isosceles triangle and, seen from above, the elbow sits halfway to the pen. */
+  const ART = { h0: 96, L1: 150, L2: 150, Lt: 96, lift: 8, home: { x: 150, y: 20, z: 8 } };
+  const deg = (r) => (r * 180) / Math.PI;
+
+  function artSolve(x, y, z, d = ART) {
+    const yaw = Math.atan2(x, y);
+    const r = Math.hypot(x, y);
+    const h = z + d.Lt - d.h0;
+    const c = clamp((r * r + h * h - d.L1 * d.L1 - d.L2 * d.L2) / (2 * d.L1 * d.L2), -1, 1);
+    const q3 = -Math.acos(c); // elbow up
+    const q2 = Math.atan2(h, r) - Math.atan2(d.L2 * Math.sin(q3), d.L1 + d.L2 * Math.cos(q3));
+    return { yaw, q2, q3, q4: -Math.PI / 2 - q2 - q3 };
+  }
+
+  function artFK(j, d = ART) {
+    const ux = Math.sin(j.yaw), uy = Math.cos(j.yaw);
+    const P = (r, z) => ({ x: ux * r, y: uy * r, z, r });
+    const re = d.L1 * Math.cos(j.q2), ze = d.h0 + d.L1 * Math.sin(j.q2);
+    const rw = re + d.L2 * Math.cos(j.q2 + j.q3), zw = ze + d.L2 * Math.sin(j.q2 + j.q3);
+    const a = j.q2 + j.q3 + j.q4;
+    return { base: P(0, 0), shoulder: P(0, d.h0), elbow: P(re, ze), wrist: P(rw, zw), tip: P(rw + d.Lt * Math.cos(a), zw + d.Lt * Math.sin(a)) };
+  }
+
+  /* Layout in real millimetres, seen from directly above (k = 0). The elbow is a single hinge, so the
+     base, both links and the pen always lie in one vertical plane: from above they form one straight
+     line that turns with the base and shortens as the elbow folds. (k > 0 would draw heights up the
+     screen, a plan-oblique view.) The text has a fixed physical size and distance from the base; the
+     whole scene is scaled to fit the stage with the base at the bottom. */
+  function articulatedGeometry(W, H, box, o = {}) {
+    const d = { ...ART, ...(o.dims || {}) };
+    const k = o.k ?? 0;
+    const s = Math.min((o.textMaxW ?? 260) / box.width, (o.textMaxCap ?? 28) / 10, (o.textMaxH ?? 66) / box.height);
+    const Yc = o.textY ?? 140;
+    const halfW = (box.width * s) / 2, halfH = (box.height * s) / 2;
+    // the highest the arm will appear, over the poses it takes
+    let top = Yc + halfH;
+    const probe = (x, y, z) => {
+      const F = artFK(artSolve(x, y, z, d), d);
+      for (const q of [F.elbow, F.wrist]) top = Math.max(top, q.y + k * q.z);
+    };
+    for (const [x, y] of [[-halfW, Yc - halfH], [halfW, Yc - halfH], [-halfW, Yc + halfH], [halfW, Yc + halfH], [0, Yc + halfH], [0, Yc - halfH]]) probe(x, y, d.lift + 16);
+    probe(d.home.x, d.home.y, d.home.z);
+    top += o.armPad ?? 20;
+    const bottom = -(o.baseR ?? 64);
+    const padT = o.padTop ?? 20, padB = o.padBottom ?? 14, padX = o.padX ?? 18;
+    const side = Math.max(halfW + (o.sidePad ?? 16), Math.abs(d.home.x) + 26, 80);
+    let P = Math.min((W - 2 * padX) / (2 * side), (H - padT - padB) / (top - bottom));
+    if (o.maxTextPx) P = Math.min(P, o.maxTextPx / (2 * halfW));
+    // flip: base at the top of the stage, reaching down; the text still reads upright
+    const flip = !!o.flip, f = flip ? -1 : 1;
+    const extra = Math.max(0, H - padT - padB - (top - bottom) * P) * (o.vAlign ?? 0.5);
+    const base = flip
+      ? { x: W * (o.baseX ?? 0.5), y: padT - bottom * P + extra }
+      : { x: W * (o.baseX ?? 0.5), y: H - padB + bottom * P - extra };
+    const rMax = Math.sqrt((d.L1 + d.L2) ** 2 - (d.Lt - d.h0) ** 2);
+    const scale = s * P;
+    const ox = base.x - halfW * P, oy = flip ? base.y + (Yc - halfH) * P : base.y - (Yc + halfH) * P;
+    const geom = { kin: 'art', W, H, scale, ox, oy, tw: 2 * halfW * P, th: 2 * halfH * P, base, d, k, P, mm: 1 / P, rMax, mmPerUnit: s, textY: Yc, topMM: top, halfW, halfH };
+    geom.px = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+    geom.toMM = (q) => ({ x: (f * (q.x - base.x)) / P, y: (f * (base.y - q.y)) / P });
+    geom.project = (p) => ({ x: base.x + f * p.x * P, y: base.y - f * (p.y + k * p.z) * P });
+    geom.flip = flip;
+    geom.reach = rMax * P;
+    geom.L1 = d.L1 * P;
+    geom.L2 = d.L2 * P;
+    return geom;
+  }
+
+  /* ── Controller ─────────────────────────────────────────────────────────────────────── */
+  function create(stage, cfg) {
+    const reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mk = (cls) => {
+      const c = document.createElement('canvas');
+      c.className = cls;
+      c.setAttribute('aria-hidden', 'true');
+      stage.appendChild(c);
+      return c;
+    };
+    const bgC = cfg.bg ? mk('pl-bg') : null;
+    const inkC = mk('pl-ink');
+    const armC = mk('pl-arm');
+    const bgX = bgC && bgC.getContext('2d');
+    const inkX = inkC.getContext('2d');
+    const armX = armC.getContext('2d');
+
+    let W = 0, H = 0, dpr = 1, geom = null, layout = null, plan = null;
+    let t = 0, segIdx = 0, inkAt = { seg: -1, d: 0 }, running = false, visible = true, last = 0, speedMul = 1;
+    const st = { j: { a1: 0, a2: 0, phi: 0 }, z: 1, k: 'wait', drawing: false, ch: -1, si: -1, progress: 0, done: false, t: 0 };
+
+    function setText(text) {
+      const maxWidth = cfg.wrap ? cfg.wrap(W || stage.clientWidth) : Infinity;
+      layout = cfg.layout || layoutText(text, { maxWidth, tracking: cfg.tracking ?? 2.4 });
+      plan = buildPlan(layout, cfg);
+      api.plan = plan;
+      api.layout = layout;
+      cfg.onPlan && cfg.onPlan(plan, api);
+      resize(true);
+      restart();
+    }
+
+    function restart() {
+      t = reduce ? plan.total + 0.01 : 0;
+      segIdx = 0;
+      inkAt = { seg: -1, d: 0 };
+      inkX.clearRect(0, 0, W, H);
+      st.done = false;
+      tick(0);
+      if (cfg.autoplay !== false) kick();
+    }
+
+    function resize(force) {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      const r = Math.min(root.devicePixelRatio || 1, 2);
+      if (!force && w === W && h === H && r === dpr) return;
+      const rewrap = cfg.wrap && w !== W && W !== 0 && cfg.wrap(w) !== cfg.wrap(W);
+      W = w; H = h; dpr = r;
+      if (rewrap) { setText(layout.text); return; }
+      for (const c of [bgC, inkC, armC]) {
+        if (!c) continue;
+        c.width = Math.round(W * dpr);
+        c.height = Math.round(H * dpr);
+      }
+      for (const x of [bgX, inkX, armX]) if (x) x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!plan) return;
+      geom = cfg.geometry(W, H, layout);
+      api.geom = geom;
+      if (bgX) { bgX.clearRect(0, 0, W, H); cfg.bg(bgX, geom, api); }
+      // replay the ink drawn so far at the new size
+      inkX.clearRect(0, 0, W, H);
+      inkAt = { seg: -1, d: 0 };
+      tick(0);
+    }
+
+    function locate() {
+      const segs = plan.segs;
+      if (segIdx >= segs.length) segIdx = segs.length - 1;
+      while (segIdx > 0 && t < segs[segIdx].t0) segIdx--;
+      while (segIdx < segs.length - 1 && t >= segs[segIdx].t0 + segs[segIdx].dur) segIdx++;
+      return segs[segIdx];
+    }
+
+    const jointsFor = (where) => solve(geom, where.home ? geom.home : geom.px(where));
+
+    function evalPlanar(seg, u) {
+        let j, tipPx = null;
+        if (seg.k === 'wait') {
+          j = jointsFor(seg.at); st.z = 1;
+        } else if (seg.k === 'move') {
+          const a = jointsFor(seg.from), b = jointsFor(seg.to);
+          const e = ease(u);
+          const a1 = unwrapTo(b.a1, a.a1), phi = unwrapTo(b.phi, a.phi);
+          j = { a1: a.a1 + (a1 - a.a1) * e, a2: a.a2 + (b.a2 - a.a2) * e, phi: a.phi + (phi - a.phi) * e };
+          st.z = 1;
+          if (seg.last && t >= seg.t0 + seg.dur) st.done = true;
+        } else if (seg.k === 'down' || seg.k === 'up') {
+          tipPx = geom.px(seg.at);
+          st.z = seg.k === 'down' ? 1 - ease(u) : ease(u);
+        } else {
+          const p = pointAt(seg.stroke, clamp(u, 0, 1) * seg.stroke.len);
+          tipPx = geom.px(p);
+          st.z = 0;
+          st.drawing = true;
+        }
+        if (tipPx) j = solve(geom, tipPx);
+        if (t >= plan.total) {
+          st.done = true;
+          if (!reduce) {
+            // idle: the servos hold position with a barely visible hunt
+            const s = t - plan.total;
+            j.a1 += 0.006 * Math.sin(s * 0.9);
+            j.a2 += 0.009 * Math.sin(s * 0.7 + 1.3);
+          }
+        }
+        st.j = j;
+        fk(geom, j, st);
+        if (tipPx) st.tip = tipPx;
+        st.base = geom.base;
+    }
+
+    /* Articulated arm: plan the pen tip in millimetres (x right, y forward, z up), solve the four
+       joints, then project every joint into the flat plan-oblique view. */
+    function evalArticulated(seg, u) {
+      const d = geom.d;
+      const at = (where, z) => (where.home ? { ...d.home } : { ...geom.toMM(geom.px(where)), z });
+      let tip;
+      if (seg.k === 'wait') tip = at(seg.at);
+      else if (seg.k === 'move') {
+        const a = at(seg.from, d.lift), b = at(seg.to, d.lift), e = ease(u);
+        const hop = Math.sin(Math.PI * u) * Math.min(5, Math.hypot(b.x - a.x, b.y - a.y) * 0.05);
+        tip = { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, z: a.z + (b.z - a.z) * e + hop };
+      } else if (seg.k === 'down') tip = at(seg.at, d.lift * (1 - ease(u)));
+      else if (seg.k === 'up') tip = at(seg.at, d.lift * ease(u));
+      else {
+        tip = at(pointAt(seg.stroke, u * seg.stroke.len), 0);
+        st.drawing = true;
+      }
+      const j = artSolve(tip.x, tip.y, tip.z, d);
+      if (t >= plan.total) {
+        st.done = true;
+        if (!reduce) {
+          const s = t - plan.total;
+          j.q2 += 0.004 * Math.sin(s * 0.9);
+          j.q3 += 0.006 * Math.sin(s * 0.7 + 1.3);
+          j.q4 = -Math.PI / 2 - j.q2 - j.q3;
+        }
+      }
+      const F = artFK(j, d);
+      st.j = j;
+      st.joints = { j1: deg(j.yaw), j2: deg(j.q2), j3: deg(j.q3), j4: deg(j.q4) };
+      st.p3 = F;
+      st.tip3 = F.tip;
+      st.z = clamp(F.tip.z / d.lift, 0, 1);
+      st.base = geom.base;
+      st.shoulder = geom.project(F.shoulder);
+      st.elbow = geom.project(F.elbow);
+      st.wrist = geom.project(F.wrist);
+      st.tip = geom.project(F.tip);
+      if (st.drawing) st.tip = geom.px(pointAt(seg.stroke, u * seg.stroke.len));
+    }
+
+    function evaluate() {
+      const seg = locate();
+      const u = seg.dur ? (t - seg.t0) / seg.dur : 1;
+      st.k = seg.k;
+      st.drawing = false;
+      st.si = seg.si ?? -1;
+      st.ch = seg.stroke ? seg.stroke.ch : -1;
+      if (geom.kin === 'art') evalArticulated(seg, clamp(u, 0, 1));
+      else evalPlanar(seg, u);
+      st.t = t;
+      st.seg = seg;
+      let drawn = 0;
+      if (seg.k === 'draw') drawn = seg.len0 + clamp(u, 0, 1) * seg.stroke.len;
+      else for (let i = segIdx; i >= 0; i--) {
+        const g = plan.segs[i];
+        if (g.k === 'draw') { drawn = g.len0 + g.stroke.len; break; }
+      }
+      st.drawn = drawn;
+      st.progress = st.done ? 1 : drawn / (plan.totalLen || 1);
+    }
+
+    /* Draw newly laid ink: everything between the last ink cursor and the current time. */
+    function laySegmentInk() {
+      const segs = plan.segs;
+      let i = Math.max(0, inkAt.seg);
+      for (; i < segs.length && segs[i].t0 <= t; i++) {
+        const g = segs[i];
+        if (g.k !== 'draw') continue;
+        const dEnd = clamp((t - g.t0) / g.dur, 0, 1) * g.stroke.len;
+        const d0 = i === inkAt.seg ? inkAt.d : 0;
+        if (dEnd > d0 + 1e-6) {
+          const pts = slice(g.stroke, d0, dEnd).map(geom.px);
+          cfg.ink(inkX, pts, { start: d0 === 0, end: dEnd >= g.stroke.len - 1e-6, stroke: g.stroke, geom, api });
+        }
+        inkAt = { seg: i, d: dEnd };
+      }
+    }
+
+    function tick(dt) {
+      t += dt;
+      evaluate();
+      laySegmentInk();
+      armX.clearRect(0, 0, W, H);
+      cfg.arm(armX, st, geom, api);
+      cfg.frame && cfg.frame(st, api);
+    }
+
+    function loop(now) {
+      if (!running) return;
+      const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 0;
+      last = now;
+      tick(dt * speedMul);
+      if (reduce && st.done) { running = false; return; }
+      requestAnimationFrame(loop);
+    }
+
+    function kick() {
+      if (running || !visible) return;
+      running = true;
+      last = 0;
+      requestAnimationFrame(loop);
+    }
+
+    const api = {
+      setText, restart, kick,
+      seek(T) { t = T; segIdx = 0; inkAt = { seg: -1, d: 0 }; inkX.clearRect(0, 0, W, H); tick(0); },
+      refresh() { resize(true); },
+      scrub(f) { api.seek(clamp(f, 0, 1) * plan.total); },
+      play() { cfg.autoplay = true; restart(); },
+      get t() { return t; },
+      set speed(v) { speedMul = v; },
+      get speed() { return speedMul; },
+      state: st,
+      trail(units) {
+        const g = st.seg;
+        if (!g || g.k !== 'draw') return null;
+        const d = clamp((t - g.t0) / g.dur, 0, 1) * g.stroke.len;
+        return slice(g.stroke, Math.max(0, d - units), d).map(geom.px);
+      },
+      reducedMotion: reduce
+    };
+
+    new ResizeObserver(() => resize(false)).observe(stage);
+    if ('IntersectionObserver' in root) {
+      new IntersectionObserver((es) => {
+        visible = es[es.length - 1].isIntersecting;
+        if (visible && cfg.autoplay !== false) kick(); else running = false;
+      }).observe(stage);
+    }
+    W = stage.clientWidth; H = stage.clientHeight;
+    setText(cfg.text);
+    return api;
+  }
+
+  /* ── Drawing helpers shared by the renderers ───────────────────────────────────────── */
+
+  /* Outline of two circles joined by their outer tangents (a tapered link). */
+  function capsule(ctx, P, r1, Q, r2) {
+    const dx = Q.x - P.x, dy = Q.y - P.y, d = Math.hypot(dx, dy) || 1e-6;
+    const th = Math.atan2(dy, dx);
+    const b = Math.acos(clamp((r1 - r2) / d, -1, 1));
+    ctx.moveTo(P.x + r1 * Math.cos(th + b), P.y + r1 * Math.sin(th + b));
+    ctx.lineTo(Q.x + r2 * Math.cos(th + b), Q.y + r2 * Math.sin(th + b));
+    ctx.arc(Q.x, Q.y, r2, th + b, th - b, true);
+    ctx.lineTo(P.x + r1 * Math.cos(th - b), P.y + r1 * Math.sin(th - b));
+    ctx.arc(P.x, P.y, r1, th - b, th + b - TAU, true);
+    ctx.closePath();
+  }
+
+  /* Render text with the stroke font as plain polylines (for labels drawn on canvas). */
+  function strokeText(ctx, text, x, y, size, opts = {}) {
+    const lay = layoutText(text, { tracking: opts.tracking ?? 3 });
+    const s = size / 10;
+    const ax = opts.align === 'center' ? lay.width / 2 : opts.align === 'right' ? lay.width : 0;
+    ctx.beginPath();
+    for (const st of lay.strokes) {
+      st.pts.forEach((p, i) => {
+        const X = x + (p.x - ax) * s, Y = y + (p.y - 10) * s;
+        i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
+      });
+    }
+    ctx.stroke();
+  }
+
+  root.Plotter = { create, layoutText, drawingLayout, buildPlan, standardGeometry, articulatedGeometry, artSolve, artFK, ART, ik2, capsule, strokeText, normalize, pointAt, FONT };
+})(window);
+</script>
+<script>
+/*
+ * arm3d.js: the 3D hero. Same arm, same motion and same view as the 2D version, rendered with
+ * three.js (global THREE) so the printed parts have real light, shading and shadows.
+ *
+ * The camera sits straight above the arm's base and looks down. Its frustum is shifted so the base
+ * appears near the top of the frame and the title in the middle. Because the camera is directly over
+ * the base, the vertical plane holding both links always passes through the camera, so the two links
+ * stay in one line on screen; perspective still shows height (the raised elbow looks closer).
+ *
+ * World frame, millimetres: x to the viewer's right, y up, z forward from the base toward the viewer.
+ */
+(function (root) {
+  'use strict';
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1));
+  const deg = (r) => (r * 180) / Math.PI;
+
+  // Equal links, pen hanging Lt = h0 below the wrist: with the pen on the paper the wrist is level
+  // with the shoulder (the same model as the 2D engine).
+  const DIM = { h0: 96, L1: 150, L2: 150, Lt: 96, lift: 8, home: { x: 150, y: 8, z: 20 } };
+
+  function solve(x, y, z) {
+    const yaw = Math.atan2(-z, x);
+    const r = Math.hypot(x, z);
+    const dy = y + DIM.Lt - DIM.h0;
+    const c = clamp((r * r + dy * dy - DIM.L1 * DIM.L1 - DIM.L2 * DIM.L2) / (2 * DIM.L1 * DIM.L2), -1, 1);
+    const q3 = -Math.acos(c);
+    const q2 = Math.atan2(dy, r) - Math.atan2(DIM.L2 * Math.sin(q3), DIM.L1 + DIM.L2 * Math.cos(q3));
+    return { yaw, q2, q3, q4: -Math.PI / 2 - q2 - q3 };
+  }
+
+  /* ── The printed arm ──────────────────────────────────────────────────────────────
+   * Base drum, turret, shoulder tower, two chunky links with rounded ends, an elbow bearing and a
+   * vertical pen holder. Motors and screws are left out. */
+  function buildArm(THREE, M) {
+    const meshes = [];
+    const mk = (parent, geo, mat, x = 0, y = 0, z = 0) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      parent.add(m);
+      meshes.push(m);
+      return m;
+    };
+    const cylZ = (r, len, seg = 48) => { const g = new THREE.CylinderGeometry(r, r, len, seg); g.rotateX(Math.PI / 2); return g; };
+    const cylX = (r1, r2, len, seg = 40) => { const g = new THREE.CylinderGeometry(r1, r2, len, seg); g.rotateZ(-Math.PI / 2); return g; };
+    const bevel = { bevelEnabled: true, bevelThickness: 2.5, bevelSize: 2.5, bevelSegments: 4, curveSegments: 36 };
+    const link = (L, R, T) => {
+      const s = new THREE.Shape();
+      s.moveTo(0, -R);
+      s.lineTo(L, -R);
+      s.absarc(L, 0, R, -Math.PI / 2, Math.PI / 2, false);
+      s.lineTo(0, R);
+      s.absarc(0, 0, R, Math.PI / 2, Math.PI * 1.5, false);
+      const g = new THREE.ExtrudeGeometry(s, { depth: T - 5, ...bevel });
+      g.translate(0, 0, -(T - 5) / 2);
+      return g;
+    };
+
+    const rootG = new THREE.Group();
+    const baseH = 44;
+    mk(rootG, new THREE.CylinderGeometry(60, 62, baseH, 96), M.pink, 0, baseH / 2, 0);
+    mk(rootG, new THREE.TorusGeometry(60, 1.6, 12, 96).rotateX(Math.PI / 2), M.pinkLight, 0, baseH, 0);
+
+    const yaw = new THREE.Group();
+    yaw.position.y = baseH;
+    rootG.add(yaw);
+    mk(yaw, new THREE.CylinderGeometry(47, 47, 10, 96), M.pinkLight, 0, 5, 0);
+    const ax = DIM.h0 - baseH;
+    const tower = new THREE.Shape();
+    tower.moveTo(-25, 8);
+    tower.lineTo(25, 8);
+    tower.lineTo(25, ax);
+    tower.absarc(0, ax, 25, 0, Math.PI, false);
+    tower.lineTo(-25, 8);
+    const tg = new THREE.ExtrudeGeometry(tower, { depth: 40, ...bevel });
+    tg.translate(0, 0, -20);
+    mk(yaw, tg, M.pink);
+
+    const sh = new THREE.Group();
+    sh.position.y = ax;
+    yaw.add(sh);
+    mk(sh, cylZ(19, 50), M.pinkLight);
+    mk(sh, link(DIM.L1, 16, 36), M.pink);
+
+    const el = new THREE.Group();
+    el.position.x = DIM.L1;
+    sh.add(el);
+    mk(el, cylZ(15, 42), M.pinkLight);
+    mk(el, cylZ(7.5, 46), M.metal);
+    mk(el, link(DIM.L2, 13, 30), M.pink);
+
+    const wr = new THREE.Group();
+    wr.position.x = DIM.L2;
+    el.add(wr);
+    mk(wr, cylZ(13, 32), M.pinkLight);
+    mk(wr, cylX(11, 11, 70), M.pink, 39, 0, 0);
+    mk(wr, cylX(4.5, 1, 22), M.tip, 85, 0, 0);
+    const tip = new THREE.Object3D();
+    tip.position.x = DIM.Lt;
+    wr.add(tip);
+
+    return {
+      root: rootG,
+      meshes,
+      pose(j) { yaw.rotation.y = j.yaw; sh.rotation.z = j.q2; el.rotation.z = j.q3; wr.rotation.z = j.q4; }
+    };
+  }
+
+  /* Ink: one ribbon mesh for the whole plan, revealed segment by segment (every 0.6 mm). */
+  function buildInk(THREE, strokes, style) {
+    const segs = strokes.map((s) => s.length - 1);
+    const total = segs.reduce((a, b) => a + b, 0);
+    const offsets = [0];
+    for (const n of segs) offsets.push(offsets[offsets.length - 1] + n);
+    const pos = new Float32Array(total * 18);
+    let v = 0;
+    const put = (x, z) => { pos[v++] = x; pos[v++] = style.y ?? 0.25; pos[v++] = z; };
+    const h = style.width / 2;
+    for (const s of strokes) {
+      let dx = 1, dz = 0;
+      for (let i = 1; i < s.length; i++) {
+        const a = s[i - 1], b = s[i];
+        const L = Math.hypot(b.x - a.x, b.z - a.z);
+        if (L > 1e-6) { dx = (b.x - a.x) / L; dz = (b.z - a.z) / L; }
+        const px = -dz * h, pz = dx * h, ex = dx * h, ez = dz * h;
+        const a1 = [a.x - ex + px, a.z - ez + pz], a2 = [a.x - ex - px, a.z - ez - pz];
+        const b1 = [b.x + ex + px, b.z + ez + pz], b2 = [b.x + ex - px, b.z + ez - pz];
+        put(...a1); put(...a2); put(...b1);
+        put(...b1); put(...a2); put(...b2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    // unlit, so the gold matches the 2D version exactly
+    const mat = new THREE.MeshBasicMaterial({
+      color: style.color, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    return {
+      mesh, segs, offsets, total,
+      reveal(n) { geo.setDrawRange(0, n * 6); },
+      dispose() { geo.dispose(); mat.dispose(); }
+    };
+  }
+
+  function webgl() {
+    try {
+      const c = document.createElement('canvas');
+      return !!(root.WebGLRenderingContext && (c.getContext('webgl') || c.getContext('experimental-webgl')));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* ── Controller ────────────────────────────────────────────────────────────────────
+   * cfg: text, duration(chars), wrapUnits, textLayout { z, maxW, maxCap, maxH }, view { height,
+   * vAlign, padPx, maxTextPx, homeX(W) }, materials(THREE), ink { color, emissive, width },
+   * environment(scene, THREE). Returns null when WebGL is unavailable, so the page can fall back. */
+  function create(stage, cfg) {
+    const THREE = root.THREE;
+    if (!THREE || !root.Plotter || !webgl()) return null;
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch (e) {
+      return null;
+    }
+    const reduce = !!(root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    renderer.setPixelRatio(Math.min(root.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x000000, 0);
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    const canvas = renderer.domElement;
+    canvas.setAttribute('aria-hidden', 'true');
+    stage.appendChild(canvas);
+
+    const scene = new THREE.Scene();
+    const view = cfg.view || {};
+    const camH = view.height ?? 1100;
+    const camera = new THREE.PerspectiveCamera(30, 1, 10, camH + 400);
+    // base at the top: screen up is -z and the drawing faces the viewer across the table.
+    // base at the bottom: screen up is +z, the viewer stands behind the arm, and screen right is -x.
+    const atBottom = view.baseAt === 'bottom', f = atBottom ? -1 : 1;
+    camera.position.set(0, camH, 0);
+    camera.up.set(0, 0, -f);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+
+    cfg.environment(scene, THREE);
+    const arm = buildArm(THREE, cfg.materials(THREE));
+    scene.add(arm.root);
+    for (const m of arm.meshes) { m.castShadow = true; m.receiveShadow = true; }
+
+    const TL = cfg.textLayout || {};
+    let layout, plan, mapPt, ink = null, textBox = { hw: 100, z0: 100, z1: 200 };
+    let t = 0, segIdx = 0, running = false, visible = true, last = 0, speed = 1, W = 1, H = 1;
+    const st = { t: 0, k: 'wait', done: false, progress: 0, si: -1, drawing: false, z: 1, joints: {} };
+    const home = { ...DIM.home };
+
+    function setText(text) {
+      layout = cfg.layout || Plotter.layoutText(text, { maxWidth: cfg.wrapUnits ?? 150, tracking: 2.4 });
+      plan = Plotter.buildPlan(layout, cfg);
+      const zc = TL.z ?? 150;
+      const s = Math.min((TL.maxW ?? 290) / layout.width, (TL.maxCap ?? 28) / 10, (TL.maxH ?? 110) / layout.height);
+      const w = layout.width, h = layout.height;
+      mapPt = (p) => ({ x: f * (p.x - w / 2) * s, z: zc + f * (p.y - h / 2) * s });
+      textBox = { hw: (w * s) / 2, z0: zc - (h * s) / 2, z1: zc + (h * s) / 2 };
+      cfg.onLayout && cfg.onLayout(textBox, scene, THREE);
+      let done = 0;
+      for (const g of plan.segs) { g.doneBefore = done; if (g.k === 'draw') done++; }
+      const strokes = plan.strokes.map((k) => {
+        const n = Math.max(1, Math.ceil((k.len * s) / 0.6));
+        const out = [];
+        for (let i = 0; i <= n; i++) out.push(mapPt(Plotter.pointAt(k, (k.len * i) / n)));
+        return out;
+      });
+      if (ink) { scene.remove(ink.mesh); ink.dispose(); }
+      ink = buildInk(THREE, strokes, { ...cfg.ink, width: cfg.ink.width });
+      scene.add(ink.mesh);
+      Object.assign(api, { plan, layout });
+      frame();
+      restart();
+    }
+
+    /* Shifted overhead frustum: frame the floor region from just behind the base to just past the
+       text, matched to the stage's aspect, with spare height mostly above the arm. */
+    function frame() {
+      const pad = view.padPx ?? 18, padT = view.padTopPx ?? pad, padB = view.padBottomPx ?? pad;
+      if (view.homeX) home.x = f * view.homeX(W);
+      const side = Math.max(textBox.hw + 16, Math.abs(home.x) + 30, 72);
+      let x0 = -side, x1 = side, z0 = -70, z1 = textBox.z1 + (view.farMarginMM ?? 14);
+      const A = Math.max(0.2, (W - 2 * pad) / Math.max(1, H - padT - padB));
+      const w = x1 - x0, h = z1 - z0;
+      // vAlign: share of any spare height that goes to the top of the screen
+      const va = view.vAlign ?? 0.85, topIsFar = atBottom;
+      if (w / h > A) {
+        const extra = w / A - h;
+        if (topIsFar) { z1 += extra * va; z0 -= extra * (1 - va); } else { z0 -= extra * va; z1 += extra * (1 - va); }
+      } else {
+        const extra = h * A - w;
+        x0 -= extra / 2;
+        x1 += extra / 2;
+      }
+      // keep the title from getting huge on very wide screens
+      const pxPerMM = (W - 2 * pad) / (x1 - x0);
+      const maxText = view.maxTextPx ?? 980;
+      if (textBox.hw * 2 * pxPerMM > maxText) {
+        const k = (textBox.hw * 2 * pxPerMM) / maxText, grow = (z1 - z0) * (k - 1);
+        x0 *= k;
+        x1 *= k;
+        if (topIsFar) { z1 += grow * va; z0 -= grow * (1 - va); } else { z0 -= grow * va; z1 += grow * (1 - va); }
+      }
+      // pixel padding, expressed on the floor plane
+      const mmPerPx = (x1 - x0) / (W - 2 * pad);
+      x0 -= pad * mmPerPx; x1 += pad * mmPerPx;
+      if (topIsFar) { z1 += padT * mmPerPx; z0 -= padB * mmPerPx; } else { z0 -= padT * mmPerPx; z1 += padB * mmPerPx; }
+      const n = camera.near, k = n / camH;
+      if (atBottom) camera.projectionMatrix.makePerspective(-x1 * k, -x0 * k, z1 * k, z0 * k, n, camera.far);
+      else camera.projectionMatrix.makePerspective(x0 * k, x1 * k, -z0 * k, -z1 * k, n, camera.far);
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    }
+
+    function locate() {
+      const segs = plan.segs;
+      if (segIdx >= segs.length) segIdx = segs.length - 1;
+      while (segIdx > 0 && t < segs[segIdx].t0) segIdx--;
+      while (segIdx < segs.length - 1 && t >= segs[segIdx].t0 + segs[segIdx].dur) segIdx++;
+      return segs[segIdx];
+    }
+
+    const at = (where, y) => (where.home ? { ...home } : { ...mapPt(where), y });
+
+    function evaluate() {
+      const seg = locate();
+      const u = seg.dur ? clamp((t - seg.t0) / seg.dur, 0, 1) : 1;
+      let tip, shown = ink.offsets[seg.doneBefore];
+      st.drawing = false;
+      if (seg.k === 'wait') tip = at(seg.at);
+      else if (seg.k === 'move') {
+        const a = at(seg.from, DIM.lift), b = at(seg.to, DIM.lift), e = ease(u);
+        const hop = Math.sin(Math.PI * u) * Math.min(5, Math.hypot(b.x - a.x, b.z - a.z) * 0.05);
+        tip = { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e + hop, z: a.z + (b.z - a.z) * e };
+      } else if (seg.k === 'down') tip = at(seg.at, DIM.lift * (1 - ease(u)));
+      else if (seg.k === 'up') tip = at(seg.at, DIM.lift * ease(u));
+      else {
+        tip = { ...mapPt(Plotter.pointAt(seg.stroke, u * seg.stroke.len)), y: 0 };
+        shown += Math.floor(u * ink.segs[seg.si]);
+        st.drawing = true;
+      }
+      st.done = t >= plan.total;
+      if (st.done) shown = ink.total;
+      ink.reveal(shown);
+      const j = solve(tip.x, tip.y, tip.z);
+      arm.pose(j);
+      st.t = t;
+      st.k = seg.k;
+      st.si = seg.si ?? -1;
+      st.z = clamp(tip.y / DIM.lift, 0, 1);
+      st.progress = ink.total ? shown / ink.total : 1;
+      st.joints = { j1: deg(Math.atan2(tip.x, tip.z)), j2: deg(j.q2), j3: deg(j.q3), j4: deg(j.q4) };
+    }
+
+    function render() {
+      renderer.render(scene, camera);
+      cfg.frame && cfg.frame(st, api);
+    }
+
+    function resize() {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      if (!w || !h) return;
+      W = w; H = h;
+      renderer.setSize(w, h, false);
+      if (plan) { frame(); render(); }
+    }
+
+    function restart() {
+      t = reduce ? plan.total + 1 : 0;
+      segIdx = 0;
+      evaluate();
+      render();
+      if (cfg.autoplay !== false) kick();
+    }
+
+    function loop(now) {
+      if (!running) return;
+      const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 0;
+      last = now;
+      t += dt * speed;
+      evaluate();
+      render();
+      if (t > plan.total + 0.2) { running = false; return; }
+      requestAnimationFrame(loop);
+    }
+    function kick() {
+      if (running || !visible || t > plan.total + 0.2) return;
+      running = true;
+      last = 0;
+      requestAnimationFrame(loop);
+    }
+
+    const api = {
+      three: true,
+      setText, restart,
+      seek(T) { t = T; segIdx = 0; evaluate(); render(); },
+      scrub(fr) { t = clamp(fr, 0, 1) * plan.total; evaluate(); render(); },
+      play() { cfg.autoplay = true; restart(); },
+      get speed() { return speed; },
+      set speed(v) { speed = v; },
+      state: st,
+      reducedMotion: reduce
+    };
+
+    new ResizeObserver(resize).observe(stage);
+    if ('IntersectionObserver' in root) {
+      new IntersectionObserver((es) => {
+        visible = es[es.length - 1].isIntersecting;
+        if (visible && cfg.autoplay !== false) kick(); else running = false;
+      }).observe(stage);
+    }
+    W = stage.clientWidth || 1;
+    H = stage.clientHeight || 1;
+    renderer.setSize(W, H, false);
+    setText(cfg.text);
+    return api;
+  }
+
+  root.Arm3D = { create, solve, DIM };
+})(window);
+</script>
+<script>
+  /* Settings: the voting link and the address the QR code opens.
+     Leave SITE_URL empty to use the page's own address once it is hosted. */
+  const VOTE_URL = '#';
+  const SITE_URL = '';
+
+  /* What the arm draws: portrait C03 "Tousled Hair", the robot's own path from
+     src/drawings/C03_Tousled_Hair.csv, one string of x,y pixel points per pen-down segment, in the
+     robot's order. For another drawing: node tools/csv2drawing.mjs <file.csv>, and paste the output here. */
+  const DRAWING = [
+    '514,153 509,153 500,146 493,145 491,143 473,139 466,134 441,130 399,130 383,120',
+    '383,120 389,105 399,99 404,92 418,85 427,84 429,80 442,77 443,74 462,70 487,70 491,68 495,70 539,75 541,76 550,77 556,84 577,92 579,97 584,99 606,120 609,126 612,128 614,137 621,143 627,158 627,168 633,174',
+    '628,198 631,175 641,171 648,161 654,160 656,155 668,148 679,146 680,143 705,139 731,140 757,148 759,153 766,155 768,158 776,162 783,171 784,184',
+    '790,186 746,186 742,196',
+    '710,203 742,196 746,202 755,202 757,205 763,206 764,208 773,210 775,212 783,214 811,237 836,270 848,293 861,301 861,305 866,306 868,308 881,312 902,312 931,301',
+    '931,287 934,324 930,340 926,342 925,347 917,360 899,373 893,374 892,377 875,378 864,373',
+    '892,378 895,390 902,392 904,397 907,399 910,405 920,413 925,429 930,430 940,465 940,492 935,503 935,511 924,534 914,544 899,548 893,553 892,567 888,579 886,580 884,586 882,587 875,604 869,608 868,614 855,629 857,638 867,647 869,657 874,660 878,680 874,724 869,726 864,743 857,754 848,761 846,768 841,769 822,785 799,792 756,793 749,814 739,825 734,837 717,856 679,886 670,888 654,900 640,902 634,905 633,908 624,910 623,911 613,912 591,921 557,928 528,929 525,932 470,932 407,923 375,912 366,911 360,908 358,906 351,904 349,902 331,897 330,894 324,893 319,887 314,886 312,884 304,881 302,877 291,872 260,841 257,837 253,829 250,827 242,810 242,803 237,803 237,794 232,790 222,727 220,725 219,716 214,706 202,702 193,689 187,687 183,680 178,679 176,677 160,674 153,675 152,678',
+    '139,629 158,624 181,625 202,646 212,650 218,649 219,635 216,632 214,607 211,604 211,551 215,542 218,507 229,493 235,492 256,471 265,453 272,447 289,394 289,349 301,336',
+    '289,394 301,395 305,401 312,401 316,405 343,404 345,401 361,397 371,392 376,385 385,382',
+    '393,479 383,472 366,468 333,469 296,486 277,504 272,513',
+    '218,507 208,507 198,513 191,513',
+    '159,576 160,584 163,586 174,624',
+    '212,650 211,663 214,666 216,694 214,706',
+    '271,668 268,663 267,640 272,618 281,598 306,574 319,572 327,566 351,568 352,571 365,573 376,580 380,587 385,588 390,599 393,601 397,614',
+    '396,611 393,614',
+    '394,619 403,650 403,669 397,691 388,706 373,717 363,720 346,717 331,705 321,686 317,653 322,630 335,609 354,598 368,598 377,602 394,619',
+    '498,716 492,715 485,719 484,726 487,731',
+    '428,811 425,825 429,842 442,858 449,860 450,863 466,872 487,877 504,877 525,872 536,866 563,841 567,828 564,810',
+    '577,797 567,810 443,813 441,810 427,811 421,808 420,801 415,800 415,789 421,780 432,778 463,778 466,775 535,775 546,778 571,778 577,787 577,797',
+    '760,792 770,733 774,727 774,717 778,713 780,682 783,680 784,656 781,652',
+    '781,652 784,647 794,645 812,626 818,624 837,625 839,629 855,631',
+    '822,624 825,605 833,594 833,586 835,583 834,574',
+    '899,548 895,513 888,495',
+    '805,503 771,497 753,488 724,467 708,446 706,445 705,441 698,436 696,427 690,419 686,406 684,404 683,395 677,382 677,370 673,366 670,336 666,331 666,322 661,310 652,305 635,305 624,310 621,321',
+    '599,321 599,308 595,297 584,286 571,284 556,291 550,297 546,310 530,318 528,324 523,326 522,332 516,336 508,352 502,357 502,363 492,381 488,402 485,405 488,465',
+    '498,467 463,463 453,460 452,458 446,457 441,451 429,447 404,422 390,395 390,385 386,382 387,342 390,340 394,319 399,317 404,303 425,276 432,273',
+    '546,310 561,314 577,315 579,316 591,318 602,324 621,321 624,324 640,324 666,331',
+    '662,314 649,326',
+    '600,478 626,469 663,469 696,486 697,490 703,492 720,509 724,518',
+    '771,497 784,555 783,608 776,645 778,652',
+    '778,652 770,653',
+    '791,645 780,632',
+    '721,670 724,661 725,633 721,615 719,613 717,608 715,606 713,602 711,600 708,591 699,586 698,581 682,572 665,566 640,567 637,572 627,573 612,587 607,588 599,600 598,607 595,608',
+    '663,612 676,640 677,669 674,683 667,699 653,714 640,720 624,719 608,708 595,686 591,668 594,635 606,612 621,600 635,597 645,599 663,612',
+    '778,705 794,701 797,692 808,687 819,677 830,675 839,678',
+    '232,790 200,792 167,782 165,778 153,772 135,754 130,741 125,737 123,727 120,725 117,703 114,701 114,685 124,650 137,636 139,628 138,622 125,610 120,601 117,589 114,587 111,580 110,573 107,570 106,555 100,549 104,511 109,507 110,497',
+    '100,549 82,545 76,532 73,531 71,526 69,524 62,503 60,483 64,451 67,450 69,434 96,398 109,390 111,378 86,363 72,342 68,325 69,300 76,298 95,311 131,311 159,289 160,284 165,282 167,273 173,269 181,255 186,254 194,241 204,237 208,230 239,220 240,217',
+    '270,224 240,217 232,200 229,199 222,186 219,157 222,137 233,133 236,122',
+    '233,133 237,140 242,140 251,154 256,155 258,158 284,162 287,167 301,166 303,162 324,161 336,155 352,153 355,148 380,143 389,139 394,129',
+    '78,283 75,298',
+    '111,380 117,381 141,374'
+  ];
+
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const layout = Plotter.drawingLayout(DRAWING, 'portrait', { size: 100 });
+    const caps = [...document.querySelectorAll('.cap')], replayBtn = $('replayDraw');
+    let started = false, shownCap = 0;
+    /* captions follow the drawing's own clock, not the scroll position */
+    function onFrame(st, api) {
+      if (!api.plan) return;
+      const f = Math.min(1, st.t / api.plan.total);
+      const c = st.done ? 3 : f < 0.12 ? 0 : f < 0.5 ? 1 : f < 0.86 ? 2 : 3;
+      if (c !== shownCap && !reduce) {
+        caps[shownCap].classList.remove('on');
+        caps[c].classList.add('on');
+        shownCap = c;
+      }
+      replayBtn.hidden = !(started && st.done && !reduce);
+    }
+    const duration = () => 15;
+    const T = window.THREE;
+    const col = (hex) => new T.Color(hex).convertSRGBToLinear();
+    const GOLD = '#c99724';
+
+    /* 3D scene: the pink printed arm on a black stage, a white sheet in a soft key light. */
+    function scene3D(stage) {
+      if (!T || !window.Arm3D) return null;
+      let paper = null;
+      return Arm3D.create(stage, {
+        layout,
+        duration,
+        autoplay: false,
+        textLayout: { z: 172, maxW: 150, maxCap: 999, maxH: 150 },
+        view: {
+          baseAt: 'bottom',
+          height: 1700,
+          vAlign: 0.4,
+          padPx: 14,
+          get padTopPx() { return reduce ? 20 : Math.round(stage.clientHeight * (stage.clientWidth < 640 ? 0.34 : 0.28)); },
+          padBottomPx: 6,
+          farMarginMM: 34,
+          maxTextPx: 620,
+          homeX: (W) => (W < 520 ? 118 : 150)
+        },
+        materials: () => ({
+          pink: new T.MeshStandardMaterial({ color: col('#ef9a89'), roughness: 0.62, metalness: 0 }),
+          pinkLight: new T.MeshStandardMaterial({ color: col('#f4ad9e'), roughness: 0.55, metalness: 0 }),
+          metal: new T.MeshStandardMaterial({ color: col('#d8d8d8'), roughness: 0.28, metalness: 0.55 }),
+          tip: new T.MeshStandardMaterial({ color: col('#c9a04a'), roughness: 0.35, metalness: 0.5 })
+        }),
+        ink: { color: col(GOLD), width: 1.25 },
+        frame: onFrame,
+        environment(scene) {
+          scene.add(new T.HemisphereLight(0xffffff, 0x1a1a1a, 0.5));
+          // key light from the upper left of the frame (screen left is +x, screen up is +z here)
+          const key = new T.DirectionalLight(0xffffff, 0.72);
+          key.position.set(300, 900, 420);
+          key.target.position.set(0, 0, 120);
+          key.castShadow = true;
+          key.shadow.mapSize.set(2048, 2048);
+          key.shadow.bias = -0.0004;
+          key.shadow.radius = 4;
+          Object.assign(key.shadow.camera, { left: -460, right: 460, top: 460, bottom: -460, near: 100, far: 2000 });
+          scene.add(key, key.target);
+        },
+        onLayout(box, scene) {
+          if (paper) return;
+          const w = box.hw * 2 + 70, near = Math.max(68, box.z0 - 26), far = box.z1 + 34;
+          const g = new T.PlaneGeometry(w, far - near);
+          g.rotateX(-Math.PI / 2);
+          paper = new T.Mesh(g, new T.MeshStandardMaterial({ color: col('#f7f6f2'), roughness: 0.92 }));
+          paper.position.set(0, 0.05, (near + far) / 2);
+          paper.receiveShadow = true;
+          scene.add(paper);
+        }
+      });
+    }
+
+    /* 2D fallback when WebGL is missing: the same arm and drawing, flat. */
+    function scene2D(stage) {
+      const PINK = '#f2a594', EDGE = '#dc8776', LIGHT = '#f8c2b5';
+      const disc = (ctx, c, r, fill, edge) => { ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); if (edge) { ctx.strokeStyle = edge; ctx.lineWidth = 1.2; ctx.stroke(); } };
+      const link = (ctx, A, r1, B, r2) => { ctx.beginPath(); Plotter.capsule(ctx, A, r1, B, r2); ctx.fillStyle = PINK; ctx.fill(); ctx.strokeStyle = EDGE; ctx.lineWidth = 1.2; ctx.stroke(); };
+      return Plotter.create(stage, {
+        text: 'portrait',
+        layout,
+        duration,
+        autoplay: false,
+        geometry: (W, H, box) => Plotter.articulatedGeometry(W, H, box, {
+          textY: 172, textMaxW: 150, textMaxCap: 999, textMaxH: 150, padTop: Math.round(H * 0.3), padBottom: 8,
+          dims: { home: { x: 150, y: 20, z: 8 } }
+        }),
+        frame: onFrame,
+        bg(ctx, g) {
+          const x0 = g.ox - 35 * g.P, y0 = g.oy - 34 * g.P;
+          ctx.fillStyle = '#f7f6f2';
+          ctx.fillRect(x0, y0, g.tw + 70 * g.P, Math.min(g.base.y - 68 * g.P, g.oy + g.th + 26 * g.P) - y0);
+        },
+        ink(ctx, pts, info) {
+          ctx.strokeStyle = GOLD;
+          ctx.lineWidth = Math.max(2, info.geom.scale * 0.5);
+          ctx.lineCap = ctx.lineJoin = 'round';
+          ctx.beginPath();
+          pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+          ctx.stroke();
+        },
+        arm(ctx, st, g) {
+          const P = g.P;
+          disc(ctx, st.base, 58 * P, PINK, EDGE);
+          disc(ctx, st.base, 42 * P, LIGHT, EDGE);
+          link(ctx, st.elbow, 15 * P, st.wrist, 12 * P);
+          link(ctx, st.shoulder, 18 * P, st.elbow, 16 * P);
+          disc(ctx, st.elbow, 8 * P, '#dadada', '#b9b9b9');
+          disc(ctx, st.wrist, 10 * P, PINK, EDGE);
+        }
+      });
+    }
+
+    const stage = $('stage');
+    const p = scene3D(stage) || scene2D(stage);
+    window.plotter = p;
+
+    /* start drawing once most of the scene is on screen; it then runs at its own pace */
+    const section = $('draw'), nav = $('localnav');
+    const begin = () => { started = true; p.play(); };
+    if (reduce) {
+      caps.forEach((c) => c.classList.add('on'));
+    } else if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((es) => {
+        if (es.some((e) => e.isIntersecting) && !started) { begin(); io.disconnect(); }
+      }, { threshold: 0.55 });
+      io.observe(section);
+    } else {
+      begin();
+    }
+    replayBtn.addEventListener('click', () => { replayBtn.hidden = true; begin(); });
+
+    /* the bar turns dark over the black sections, as on apple.com */
+    const darkSections = [section, $('film')];
+    let pending = false;
+    function navTone() {
+      pending = false;
+      const y = nav.getBoundingClientRect().bottom;
+      nav.classList.toggle('dark', darkSections.some((s) => { const b = s.getBoundingClientRect(); return b.top <= y && b.bottom >= y; }));
+    }
+    window.addEventListener('scroll', () => { if (!pending) { pending = true; requestAnimationFrame(navTone); } }, { passive: true });
+    window.addEventListener('resize', navTone);
+    navTone();
+
+    /* vote and QR */
+    const vote = $('voteLink');
+    if (VOTE_URL === '#') {
+      vote.title = 'The voting link has not been set yet';
+      vote.addEventListener('click', (e) => e.preventDefault());
+    } else {
+      vote.href = VOTE_URL;
+      vote.removeAttribute('aria-disabled');
+      vote.target = '_blank';
+      vote.rel = 'noreferrer';
+    }
+    const embedded = window.self !== window.top;
+    const own = /^https?:/.test(location.protocol) && !embedded ? location.href.split('#')[0] : '';
+    const url = SITE_URL || own;
+    const box = $('qr');
+    if (url && window.qrcode) {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+      $('siteUrl').textContent = url;
+    } else {
+      box.classList.add('empty');
+      box.textContent = 'QR code appears on the hosted page';
+      $('siteUrl').textContent = 'Set SITE_URL in the page script to fix the address.';
+    }
+  })();
+</script>
+
+</body>
+</html>

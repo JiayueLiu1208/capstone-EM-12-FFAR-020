@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Real-Time Robotic Portrait Drawing System</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Capstone project page for a real-time robotic portrait drawing system.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one quiet white page. The only colour is the arm, pink like the printed one, and the
+     gold ink it writes the title with. Everything else is black type, white space and hairlines. */
+  :root {
+    --page: #ffffff;
+    --ink: #161616;
+    --muted: #6b6b6b;
+    --rule: #e7e7e7;
+    --soft: #f5f5f3;
+    --f-sans: 'Geist', 'Helvetica Neue', Arial, sans-serif;
+    --f-mono: 'Geist Mono', ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--page); }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 400 18px/1.6 var(--f-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+  :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .gutter {
+    padding-left: max(20px, env(safe-area-inset-left, 0px));
+    padding-right: max(20px, env(safe-area-inset-right, 0px));
+  }
+  .inner { max-width: 1120px; margin: 0 auto; }
+  .label { margin: 0 0 14px; font: 500 12px/1.4 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h2 { margin: 0 0 18px; font: 600 clamp(30px, 4.2vw, 50px)/1.05 var(--f-sans); letter-spacing: -0.03em; text-wrap: balance; }
+  p { margin: 0 0 16px; max-width: 58ch; }
+  .lead { font-size: 22px; line-height: 1.45; letter-spacing: -0.01em; }
+  .muted { color: var(--muted); }
+
+  /* top bar */
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-block: 22px; }
+  .bar nav { display: flex; gap: 26px; font-size: 15px; }
+  .bar nav a { text-decoration: none; color: var(--muted); }
+  .bar nav a:hover { color: var(--ink); }
+
+  /* hero */
+  .stage { position: relative; height: clamp(440px, 56vw, 740px); }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .credits { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 10px 32px; padding-block: 18px 22px; border-bottom: 1px solid var(--rule); }
+  .credits p { margin: 0; }
+  .credits .names { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; }
+  .try { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-block: 16px 0; }
+  .try label { font-size: 15px; color: var(--muted); }
+  .try form { display: flex; gap: 8px; flex: 1 1 340px; max-width: 520px; min-width: 0; }
+  .try input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 2px;
+    border: 0;
+    border-bottom: 1px solid var(--ink);
+    border-radius: 0;
+    background: transparent;
+    color: var(--ink);
+    font: 500 16px var(--f-sans);
+  }
+  .try input:focus { outline: none; border-bottom-width: 2px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--page);
+    font: 500 15px var(--f-sans);
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .btn:hover { background: #333; }
+  .btn.line { background: transparent; color: var(--ink); }
+  .btn.line:hover { background: var(--soft); }
+  .btn[aria-disabled="true"] { cursor: not-allowed; opacity: 0.55; }
+
+  section { padding-block: 104px 0; }
+  .two { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 40px 64px; align-items: start; }
+  .two > * { min-width: 0; }
+  figure { margin: 0; }
+  video { display: block; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--soft); }
+  figcaption { margin-top: 10px; }
+
+  /* pipeline */
+  .steps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0; margin: 36px 0 0; padding: 0; list-style: none; counter-reset: s; border-top: 1px solid var(--ink); }
+  .steps li { padding: 16px 16px 8px 0; counter-increment: s; min-width: 0; }
+  .steps li + li { padding-left: 16px; border-left: 1px solid var(--rule); }
+  .steps li::before { content: counter(s, decimal-leading-zero); display: block; margin-bottom: 26px; font: 500 12px var(--f-mono); color: var(--muted); }
+  .steps h3 { margin: 0 0 8px; font: 600 18px/1.2 var(--f-sans); letter-spacing: -0.01em; }
+  .steps p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--muted); }
+
+  /* vote */
+  .vote { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 40px 64px; align-items: center; padding: 48px; border-radius: 16px; background: var(--soft); }
+  .vote > * { min-width: 0; }
+  .qr { display: flex; gap: 20px; align-items: center; }
+  .qr-box { flex: none; display: grid; place-items: center; width: 148px; height: 148px; padding: 10px; border-radius: 10px; background: var(--page); }
+  .qr-box svg { display: block; width: 100%; height: 100%; }
+  .qr-box.empty { border: 1px dashed #bdbdbd; font: 500 11px/1.4 var(--f-mono); color: var(--muted); text-align: center; }
+  .qr p { margin: 0; max-width: 240px; }
+  .qr .url { margin-top: 6px; font: 400 13px/1.45 var(--f-mono); color: var(--muted); overflow-wrap: anywhere; }
+
+  footer { margin-top: 104px; padding-block: 28px 40px; border-top: 1px solid var(--rule); font-size: 15px; color: var(--muted); }
+  footer .inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 30px; }
+
+  @media (max-width: 1100px) {
+    .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 24px; }
+    .steps li:nth-child(5) { border-left: 0; padding-left: 0; }
+  }
+  @media (max-width: 860px) {
+    .two, .vote { grid-template-columns: minmax(0, 1fr); }
+    .vote { padding: 28px; }
+    .steps { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
+    .steps li, .steps li + li { display: grid; grid-template-columns: 44px minmax(0, 1fr); padding: 14px 0; border-left: 0; border-bottom: 1px solid var(--rule); }
+    .steps li::before { grid-row: span 2; margin: 3px 0 0; }
+    .bar nav { display: none; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 17px; }
+    .lead { font-size: 20px; }
+    .stage { height: 380px; }
+    .try form { flex-wrap: wrap; }
+    .try input { flex: 1 1 100%; }
+    .qr { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+
+<header class="gutter">
+  <div class="inner bar">
+    <span class="label" style="margin:0">Capstone project</span>
+    <nav aria-label="Sections">
+      <a href="#about">About</a>
+      <a href="#pipeline">How it works</a>
+      <a href="#vote">Vote</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="gutter">
+    <div class="inner">
+      <h1 class="sr-only" id="siteTitle">Real-Time Robotic Portrait Drawing System</h1>
+      <div class="stage" id="stage"></div>
+      <div class="credits">
+        <p class="names">By Jacqueline Mei, Luna Liu, Yi Ji</p>
+        <p class="muted">Supervised by Farhad Farokhi</p>
+      </div>
+      <div class="try">
+        <label for="plotText">Give the arm something else to write</label>
+        <form id="plotForm">
+          <input id="plotText" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Your name">
+          <button class="btn" type="submit">Draw</button>
+          <button class="btn line" type="button" id="replay">Replay</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <section class="gutter" id="about">
+    <div class="inner two">
+      <div>
+        <p class="label">A live capstone experience</p>
+        <h2>Your face. Drawn live.</h2>
+        <p class="lead">Sit for a photo. Watch technology turn your expression into a one-of-a-kind line portrait.</p>
+        <p>Imagine taking a photo and watching a robot turn it into a drawing right in front of you. Our system transforms digital images into sketch paths, then guides a robotic arm to recreate the portrait on paper as a unique physical artwork.</p>
+      </div>
+      <figure>
+        <video controls playsinline preload="metadata" poster="media/video-poster.jpg">
+          <source src="media/capstone_video.mp4" type="video/mp4">
+          Your browser cannot play this video.
+        </video>
+        <figcaption class="label">Project video · 0:24</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="gutter" id="pipeline">
+    <div class="inner">
+      <p class="label">System pipeline</p>
+      <h2>From photo to physical artwork</h2>
+      <ol class="steps">
+        <li><h3>Photo capture</h3><p>A ring light and camera capture a clear portrait in real time.</p></li>
+        <li><h3>Image processing</h3><p>The computer finds the lines: face regions become edges and semantic layers.</p></li>
+        <li><h3>Sketch conversion</h3><p>The photo becomes a few essential strokes: eyes, contour, hair.</p></li>
+        <li><h3>Drawing path</h3><p>The strokes are put in order as one robot-ready path.</p></li>
+        <li><h3>Robot planning</h3><p>The path is turned into motion for the arm.</p></li>
+        <li><h3>Control</h3><p>The controller drives the 3-DOF arm along the path.</p></li>
+        <li><h3>Robot drawing</h3><p>A real pen follows the plotted path across a take-home postcard, one line at a time.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="gutter">
+    <div class="inner vote" id="vote">
+      <div>
+        <p class="label">Take it home</p>
+        <h2>Your portrait. Your vote.</h2>
+        <p>Keep the drawing. Scan the voting QR printed on the real postcard. Come sit for yours.</p>
+        <a class="btn" id="voteLink" href="#" aria-disabled="true">Vote for us</a>
+      </div>
+      <div class="qr">
+        <div class="qr-box" id="qr" aria-label="QR code that opens this website"></div>
+        <div>
+          <p>Scan to open this website</p>
+          <p class="url" id="siteUrl"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="gutter">
+  <div class="inner">
+    <span>Real-Time Robotic Portrait Drawing System · Capstone project</span>
+    <a href="https://github.com/JiayueLiu1208/capstone-EM-12-FFAR-020">Source on GitHub ↗</a>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script>
+/*
+ * plotter.js: the shared drawing engine behind every version of the site.
+ *
+ *   text ─▶ single-stroke font ─▶ ordered strokes ─▶ timeline ─▶ inverse kinematics ─▶ canvas
+ *
+ * Each page supplies its own geometry and renderers (background, ink, arm); the engine owns
+ * the font, the motion plan, the kinematics, and the animation loop.
+ */
+(function (root) {
+  'use strict';
+
+  const TAU = Math.PI * 2;
+  const D2R = Math.PI / 180;
+  const hyp = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  /* ── Single-stroke font ─────────────────────────────────────────────────────────────
+   * Cap height is 10 units and y grows downward (0 = cap line, 10 = baseline).
+   * Each glyph is [advance width, ...strokes]. A stroke is a list of tokens:
+   *   "x,y"                  a point
+   *   "@cx,cy,rx,ry,a0,a1"   an elliptical arc sampled from angle a0 to a1 (degrees)
+   */
+  const DOT = (x, y) => `@${x},${y},0.38,0.38,0,360`;
+  const GLYPHS = {
+    A: [7, '0,10 3.5,0 7,10', '1.3,6.5 5.7,6.5'],
+    B: [6.5, '0,10 0,0 3.5,0 @3.5,2.5,2.5,2.5,-90,90 0,5', '0,5 4,5 @4,7.5,2.5,2.5,-90,90 0,10'],
+    C: [6.2, '@3.5,5,3.5,5,-42,-318'],
+    D: [6.5, '0,0 0,10 2.5,10 @2.5,5,4,5,90,-90 0,0'],
+    E: [5.5, '5.5,0 0,0 0,10 5.5,10', '0,5 4.5,5'],
+    F: [5.5, '5.5,0 0,0 0,10', '0,5 4.5,5'],
+    G: [7, '@3.5,5,3.5,5,-42,-360 4,5'],
+    H: [6, '0,0 0,10', '6,0 6,10', '0,5 6,5'],
+    I: [0, '0,0 0,10'],
+    J: [5, '5,0 5,7.2 @2.5,7.2,2.5,2.8,0,180'],
+    K: [6, '0,0 0,10', '6,0 0,6.2', '2.1,4.1 6,10'],
+    L: [5, '0,0 0,10 5,10'],
+    M: [7.5, '0,10 0,0 3.75,7 7.5,0 7.5,10'],
+    N: [6, '0,10 0,0 6,10 6,0'],
+    O: [7, '@3.5,5,3.5,5,-90,270'],
+    P: [6, '0,10 0,0 3.5,0 @3.5,2.75,2.5,2.75,-90,90 0,5.5'],
+    Q: [7, '@3.5,5,3.5,5,-90,270', '4.3,7.3 7,10.2'],
+    R: [6, '0,10 0,0 3.5,0 @3.5,2.75,2.5,2.75,-90,90 0,5.5', '3.2,5.5 6,10'],
+    S: [6, '@3,2.5,2.8,2.5,-15,-270 @3,7.5,3,2.5,-90,165'],
+    T: [6, '0,0 6,0', '3,0 3,10'],
+    U: [6, '0,0 0,7 @3,7,3,3,180,0 6,0'],
+    V: [7, '0,0 3.5,10 7,0'],
+    W: [9.5, '0,0 2.3,10 4.75,2.5 7.2,10 9.5,0'],
+    X: [6.5, '0,0 6.5,10', '6.5,0 0,10'],
+    Y: [6.5, '0,0 3.25,5 6.5,0', '3.25,5 3.25,10'],
+    Z: [6, '0,0 6,0 0,10 6,10'],
+    0: [6, '@3,5,3,5,-90,270'],
+    1: [3, '0.6,2.2 3,0 3,10'],
+    2: [6, '@3,3,3,3,-165,20 0,10 6,10'],
+    3: [6, '@3,2.5,2.8,2.5,-160,90 @3,7.5,3,2.5,-90,160'],
+    4: [6.5, '4.5,10 4.5,0 0,7 6.5,7'],
+    5: [6, '5.6,0 0.8,0 0.4,4.6 @3,6.9,3,3.1,-140,150'],
+    6: [6, '@3.3,5,3.1,5,-55,-180 0.2,7 @3,7,2.8,3,180,540'],
+    7: [6, '0,0 6,0 2.2,10'],
+    8: [6, '@3,2.6,2.6,2.4,90,450 @3,7.5,3,2.5,-90,270'],
+    9: [6, '@3,3,2.8,3,0,360 5.8,5 @3,5,2.8,5,0,125'],
+    ' ': [4.5],
+    '-': [4, '0,5.5 4,5.5'],
+    '_': [6, '0,10.6 6,10.6'],
+    '.': [0.8, DOT(0.4, 9.6)],
+    ',': [1, '0.8,9.2 0,11.6'],
+    '!': [0.8, '0.4,0 0.4,7', DOT(0.4, 9.6)],
+    '?': [5, '@2.5,2.5,2.5,2.5,-170,90 2.5,7', DOT(2.5, 9.6)],
+    "'": [0, '0,0 0,2.8'],
+    ':': [0.8, DOT(0.4, 3.6), DOT(0.4, 9.6)],
+    '/': [5, '0,10.5 5,-0.5'],
+    '+': [5, '0,5.5 5,5.5', '2.5,3 2.5,8'],
+    '=': [5, '0,4 5,4', '0,7 5,7'],
+    '(': [2, '@4.5,5,4.5,6.5,-130,-230'],
+    ')': [2, '@-2.5,5,4.5,6.5,-50,50'],
+    '#': [6.5, '2,0 1,10', '5.5,0 4.5,10', '0,3.5 6.5,3.5', '0,6.5 6.5,6.5']
+  };
+
+  function parseStroke(src) {
+    const raw = [];
+    for (const tok of src.trim().split(/\s+/)) {
+      if (tok[0] === '@') {
+        const [cx, cy, rx, ry, a0, a1] = tok.slice(1).split(',').map(Number);
+        const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 7));
+        for (let i = 0; i <= n; i++) {
+          const a = (a0 + ((a1 - a0) * i) / n) * D2R;
+          raw.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+        }
+      } else {
+        const [x, y] = tok.split(',').map(Number);
+        raw.push({ x, y });
+      }
+    }
+    const pts = [raw[0]];
+    for (let i = 1; i < raw.length; i++) if (hyp(raw[i], pts[pts.length - 1]) > 1e-4) pts.push(raw[i]);
+    return pts;
+  }
+
+  const FONT = {};
+  for (const ch in GLYPHS) {
+    const [w, ...strokes] = GLYPHS[ch];
+    FONT[ch] = { w, strokes: strokes.map(parseStroke) };
+  }
+
+  const normalize = (text) =>
+    String(text).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const glyph = (ch) => FONT[ch] || FONT[' '];
+
+  function measure(s, tracking) {
+    let w = 0;
+    for (const ch of s) w += glyph(ch).w + tracking;
+    return Math.max(0, w - tracking);
+  }
+
+  /* Lay text out in font units, wrapping on spaces when a line would pass maxWidth. */
+  function layoutText(text, { maxWidth = Infinity, tracking = 2.4, lineGap = 7 } = {}) {
+    const clean = normalize(text) || ' ';
+    const lines = [];
+    let line = '';
+    for (const word of clean.split(' ')) {
+      const cand = line ? line + ' ' + word : word;
+      if (line && measure(cand, tracking) > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else line = cand;
+    }
+    lines.push(line);
+
+    const widths = lines.map((l) => measure(l, tracking));
+    const width = Math.max(1, ...widths);
+    const strokes = [];
+    let ci = 0;
+    lines.forEach((l, li) => {
+      let x = (width - widths[li]) / 2;
+      const y0 = li * (10 + lineGap);
+      for (const ch of l) {
+        for (const s of glyph(ch).strokes) {
+          strokes.push({ pts: s.map((p) => ({ x: p.x + x, y: p.y + y0 })), ch: ci, glyph: ch });
+        }
+        x += glyph(ch).w + tracking;
+        ci++;
+      }
+      ci++; // the space that the line break replaced
+    });
+    return { text: clean, lines, strokes, width, height: lines.length * 10 + (lines.length - 1) * lineGap };
+  }
+
+  /* A picture instead of text: stroke strings in the same token syntax as the font, drawn in the
+     given order. The result is a layout, so it plans and plots exactly like a word. */
+  /* A drawing is drawn as listed: stroke by stroke, each in its own direction (fixed).
+     opts.size rescales so the longer side measures that many units, e.g. for pixel data. */
+  function drawingLayout(defs, name = 'drawing', opts = {}) {
+    const strokes = defs.map((d, i) => ({ pts: parseStroke(d), ch: i, glyph: '', fixed: true }));
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const s of strokes) for (const p of s.pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+    const k = opts.size ? opts.size / Math.max(x1 - x0, y1 - y0) : 1;
+    for (const s of strokes) s.pts = s.pts.map((p) => ({ x: (p.x - x0) * k, y: (p.y - y0) * k }));
+    return { text: name, lines: [name], strokes, width: (x1 - x0) * k, height: (y1 - y0) * k };
+  }
+
+  /* Keep letters in reading order; inside a letter, pick the nearest stroke end next,
+     reversing a stroke when its far end is closer (what a real plotter's planner does). */
+  function orderStrokes(strokes) {
+    const out = [];
+    let pen = { x: 0, y: 10 };
+    for (let i = 0; i < strokes.length; ) {
+      let j = i;
+      while (j < strokes.length && strokes[j].ch === strokes[i].ch) j++;
+      const group = strokes.slice(i, j);
+      while (group.length) {
+        let best = 0, bestD = Infinity, flip = false;
+        group.forEach((s, k) => {
+          const da = hyp(pen, s.pts[0]);
+          const db = hyp(pen, s.pts[s.pts.length - 1]);
+          if (da < bestD) { bestD = da; best = k; flip = false; }
+          if (!s.fixed && db < bestD - 1e-6) { bestD = db; best = k; flip = true; }
+        });
+        const s = group.splice(best, 1)[0];
+        const pts = flip ? s.pts.slice().reverse() : s.pts;
+        const cum = [0];
+        for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + hyp(pts[k - 1], pts[k]));
+        out.push({ ...s, pts, cum, len: cum[cum.length - 1] });
+        pen = pts[pts.length - 1];
+      }
+      i = j;
+    }
+    return out;
+  }
+
+  /* ── Motion plan ────────────────────────────────────────────────────────────────────
+   * Segments: wait / move (pen up, joint-space) / down / draw (pen down, Cartesian) / up.
+   * Durations are in font units, so the plan survives a resize unchanged. */
+  const HOME = { home: true };
+
+  function buildPlan(layout, opts = {}) {
+    const strokes = orderStrokes(layout.strokes);
+    const segs = [];
+    const add = (seg) => { segs.push(seg); return seg; };
+    add({ k: 'wait', dur: opts.startDelay ?? 0.5, at: HOME });
+    let from = HOME, si = 0;
+    for (const s of strokes) {
+      const a = s.pts[0];
+      const dist = from === HOME ? 40 : hyp(from, a);
+      add({ k: 'move', dur: 0.06 + 0.06 * Math.sqrt(dist), from, to: a, mid: true });
+      add({ k: 'down', dur: 0.07, at: a, stroke: s, si, mid: true });
+      add({ k: 'draw', dur: s.len / 30, stroke: s, si, mid: true });
+      add({ k: 'up', dur: 0.07, at: s.pts[s.pts.length - 1], stroke: s, si, mid: true });
+      from = s.pts[s.pts.length - 1];
+      si++;
+    }
+    add({ k: 'move', dur: 1.1, from, to: HOME, last: true });
+
+    // Rescale the writing part so a word takes a watchable amount of time.
+    const chars = layout.text.replace(/ /g, '').length || 1;
+    const rawMid = segs.reduce((s, g) => s + (g.mid ? g.dur : 0), 0) || 1;
+    const target = opts.duration ? opts.duration(chars) : clamp(3.5 + 0.55 * chars, 4, 13);
+    const f = clamp(target / rawMid, 0.3, 1.4);
+    let t = 0;
+    for (const g of segs) {
+      if (g.mid) g.dur *= f;
+      g.t0 = t;
+      t += g.dur;
+    }
+    const totalLen = strokes.reduce((s, k) => s + k.len, 0);
+    let acc = 0;
+    for (const g of segs) if (g.k === 'draw') { g.len0 = acc; acc += g.stroke.len; }
+    return { segs, strokes, total: t, totalLen, layout, speed: 30 / f };
+  }
+
+  function pointAt(stroke, d) {
+    const { pts, cum } = stroke;
+    if (d <= 0) return { x: pts[0].x, y: pts[0].y, i: 0 };
+    if (d >= stroke.len) { const p = pts[pts.length - 1]; return { x: p.x, y: p.y, i: pts.length - 1 }; }
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= d) lo = m; else hi = m; }
+    const u = (d - cum[lo]) / (cum[hi] - cum[lo] || 1);
+    return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * u, y: pts[lo].y + (pts[hi].y - pts[lo].y) * u, i: lo };
+  }
+
+  /* Polyline along a stroke from distance d0 to d1, including the vertices in between. */
+  function slice(stroke, d0, d1) {
+    const a = pointAt(stroke, d0), b = pointAt(stroke, d1);
+    const out = [{ x: a.x, y: a.y }];
+    for (let i = a.i + 1; i <= b.i; i++) if (stroke.cum[i] > d0 && stroke.cum[i] < d1) out.push(stroke.pts[i]);
+    out.push({ x: b.x, y: b.y });
+    return out;
+  }
+
+  /* ── Kinematics ─────────────────────────────────────────────────────────────────────
+   * Screen coordinates (y down). a1 is the shoulder angle, a2 the elbow angle relative
+   * to link 1, phi the absolute tool direction (wrist → pen tip) when a tool is present. */
+  function ik2(L1, L2, dx, dy, elbow) {
+    const c = clamp((dx * dx + dy * dy - L1 * L1 - L2 * L2) / (2 * L1 * L2), -1, 1);
+    const a2 = elbow * Math.acos(c);
+    const a1 = Math.atan2(dy, dx) - Math.atan2(L2 * Math.sin(a2), L1 + L2 * Math.cos(a2));
+    return { a1, a2 };
+  }
+
+  function solve(geom, tip) {
+    let phi = 0, w = tip;
+    if (geom.tool) {
+      phi = geom.tool.angle(tip, geom);
+      w = { x: tip.x - geom.tool.len * Math.cos(phi), y: tip.y - geom.tool.len * Math.sin(phi) };
+    }
+    const j = ik2(geom.L1, geom.L2, w.x - geom.base.x, w.y - geom.base.y, geom.elbow);
+    j.phi = phi;
+    return j;
+  }
+
+  function fk(geom, j, out) {
+    const { base, L1, L2 } = geom;
+    out.elbow = { x: base.x + L1 * Math.cos(j.a1), y: base.y + L1 * Math.sin(j.a1) };
+    out.wrist = { x: out.elbow.x + L2 * Math.cos(j.a1 + j.a2), y: out.elbow.y + L2 * Math.sin(j.a1 + j.a2) };
+    out.tip = geom.tool
+      ? { x: out.wrist.x + geom.tool.len * Math.cos(j.phi), y: out.wrist.y + geom.tool.len * Math.sin(j.phi) }
+      : out.wrist;
+    return out;
+  }
+
+  const unwrapTo = (a, ref) => a + TAU * Math.round((ref - a) / TAU);
+  const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1));
+
+  /* A sensible default layout: text across the upper part of the stage, arm base below it,
+     link lengths sized so every letter is in reach with the elbow still bent. */
+  function standardGeometry(W, H, box, o = {}) {
+    const maxTW = Math.min(W * (o.textWidth ?? 0.84), o.maxTextPx ?? 980);
+    const maxTH = H * (o.textHeight ?? 0.3);
+    const scale = Math.min(maxTW / box.width, maxTH / box.height);
+    const tw = box.width * scale, th = box.height * scale;
+    const cx = W * (o.textX ?? 0.5), cy = H * (o.textY ?? 0.36);
+    const ox = cx - tw / 2, oy = cy - th / 2;
+    const base = { x: W * (o.baseX ?? 0.5), y: H - (o.baseInset ?? 40) };
+    const geom = { W, H, scale, ox, oy, tw, th, base, elbow: o.elbow ?? 1 };
+    geom.px = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+
+    let far = 0;
+    const corners = [[ox, oy], [ox + tw, oy], [ox, oy + th], [ox + tw, oy + th]];
+    for (const [x, y] of corners) far = Math.max(far, Math.hypot(x - base.x, y - base.y));
+    if (o.tool) {
+      geom.tool = { len: far * o.tool.len, angle: o.tool.angle };
+      far = 0;
+      for (const [x, y] of corners) {
+        const phi = o.tool.angle({ x, y }, geom);
+        far = Math.max(far, Math.hypot(x - geom.tool.len * Math.cos(phi) - base.x, y - geom.tool.len * Math.sin(phi) - base.y));
+      }
+    }
+    const reach = far * (o.reach ?? 1.1);
+    geom.reach = reach;
+    geom.L1 = reach * (o.split ?? 0.53);
+    geom.L2 = reach - geom.L1;
+    geom.home = { x: base.x + reach * (o.homeX ?? 0.3), y: base.y - reach * (o.homeY ?? 0.42) };
+    return geom;
+  }
+
+  /* ── Articulated arm (base yaw, shoulder, elbow, wrist) ──────────────────────────────
+   * Millimetres; x to the right, y forward from the base, z up. The wrist keeps the pen vertical
+   * and the pen lifts by moving the whole arm up in z. The links are equal and the pen hangs
+   * Lt = h0 below the wrist, so with the pen on the paper the wrist is level with the shoulder:
+   * the arm is an isosceles triangle and, seen from above, the elbow sits halfway to the pen. */
+  const ART = { h0: 96, L1: 150, L2: 150, Lt: 96, lift: 8, home: { x: 150, y: 20, z: 8 } };
+  const deg = (r) => (r * 180) / Math.PI;
+
+  function artSolve(x, y, z, d = ART) {
+    const yaw = Math.atan2(x, y);
+    const r = Math.hypot(x, y);
+    const h = z + d.Lt - d.h0;
+    const c = clamp((r * r + h * h - d.L1 * d.L1 - d.L2 * d.L2) / (2 * d.L1 * d.L2), -1, 1);
+    const q3 = -Math.acos(c); // elbow up
+    const q2 = Math.atan2(h, r) - Math.atan2(d.L2 * Math.sin(q3), d.L1 + d.L2 * Math.cos(q3));
+    return { yaw, q2, q3, q4: -Math.PI / 2 - q2 - q3 };
+  }
+
+  function artFK(j, d = ART) {
+    const ux = Math.sin(j.yaw), uy = Math.cos(j.yaw);
+    const P = (r, z) => ({ x: ux * r, y: uy * r, z, r });
+    const re = d.L1 * Math.cos(j.q2), ze = d.h0 + d.L1 * Math.sin(j.q2);
+    const rw = re + d.L2 * Math.cos(j.q2 + j.q3), zw = ze + d.L2 * Math.sin(j.q2 + j.q3);
+    const a = j.q2 + j.q3 + j.q4;
+    return { base: P(0, 0), shoulder: P(0, d.h0), elbow: P(re, ze), wrist: P(rw, zw), tip: P(rw + d.Lt * Math.cos(a), zw + d.Lt * Math.sin(a)) };
+  }
+
+  /* Layout in real millimetres, seen from directly above (k = 0). The elbow is a single hinge, so the
+     base, both links and the pen always lie in one vertical plane: from above they form one straight
+     line that turns with the base and shortens as the elbow folds. (k > 0 would draw heights up the
+     screen, a plan-oblique view.) The text has a fixed physical size and distance from the base; the
+     whole scene is scaled to fit the stage with the base at the bottom. */
+  function articulatedGeometry(W, H, box, o = {}) {
+    const d = { ...ART, ...(o.dims || {}) };
+    const k = o.k ?? 0;
+    const s = Math.min((o.textMaxW ?? 260) / box.width, (o.textMaxCap ?? 28) / 10, (o.textMaxH ?? 66) / box.height);
+    const Yc = o.textY ?? 140;
+    const halfW = (box.width * s) / 2, halfH = (box.height * s) / 2;
+    // the highest the arm will appear, over the poses it takes
+    let top = Yc + halfH;
+    const probe = (x, y, z) => {
+      const F = artFK(artSolve(x, y, z, d), d);
+      for (const q of [F.elbow, F.wrist]) top = Math.max(top, q.y + k * q.z);
+    };
+    for (const [x, y] of [[-halfW, Yc - halfH], [halfW, Yc - halfH], [-halfW, Yc + halfH], [halfW, Yc + halfH], [0, Yc + halfH], [0, Yc - halfH]]) probe(x, y, d.lift + 16);
+    probe(d.home.x, d.home.y, d.home.z);
+    top += o.armPad ?? 20;
+    const bottom = -(o.baseR ?? 64);
+    const padT = o.padTop ?? 20, padB = o.padBottom ?? 14, padX = o.padX ?? 18;
+    const side = Math.max(halfW + (o.sidePad ?? 16), Math.abs(d.home.x) + 26, 80);
+    let P = Math.min((W - 2 * padX) / (2 * side), (H - padT - padB) / (top - bottom));
+    if (o.maxTextPx) P = Math.min(P, o.maxTextPx / (2 * halfW));
+    // flip: base at the top of the stage, reaching down; the text still reads upright
+    const flip = !!o.flip, f = flip ? -1 : 1;
+    const extra = Math.max(0, H - padT - padB - (top - bottom) * P) * (o.vAlign ?? 0.5);
+    const base = flip
+      ? { x: W * (o.baseX ?? 0.5), y: padT - bottom * P + extra }
+      : { x: W * (o.baseX ?? 0.5), y: H - padB + bottom * P - extra };
+    const rMax = Math.sqrt((d.L1 + d.L2) ** 2 - (d.Lt - d.h0) ** 2);
+    const scale = s * P;
+    const ox = base.x - halfW * P, oy = flip ? base.y + (Yc - halfH) * P : base.y - (Yc + halfH) * P;
+    const geom = { kin: 'art', W, H, scale, ox, oy, tw: 2 * halfW * P, th: 2 * halfH * P, base, d, k, P, mm: 1 / P, rMax, mmPerUnit: s, textY: Yc, topMM: top, halfW, halfH };
+    geom.px = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+    geom.toMM = (q) => ({ x: (f * (q.x - base.x)) / P, y: (f * (base.y - q.y)) / P });
+    geom.project = (p) => ({ x: base.x + f * p.x * P, y: base.y - f * (p.y + k * p.z) * P });
+    geom.flip = flip;
+    geom.reach = rMax * P;
+    geom.L1 = d.L1 * P;
+    geom.L2 = d.L2 * P;
+    return geom;
+  }
+
+  /* ── Controller ─────────────────────────────────────────────────────────────────────── */
+  function create(stage, cfg) {
+    const reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mk = (cls) => {
+      const c = document.createElement('canvas');
+      c.className = cls;
+      c.setAttribute('aria-hidden', 'true');
+      stage.appendChild(c);
+      return c;
+    };
+    const bgC = cfg.bg ? mk('pl-bg') : null;
+    const inkC = mk('pl-ink');
+    const armC = mk('pl-arm');
+    const bgX = bgC && bgC.getContext('2d');
+    const inkX = inkC.getContext('2d');
+    const armX = armC.getContext('2d');
+
+    let W = 0, H = 0, dpr = 1, geom = null, layout = null, plan = null;
+    let t = 0, segIdx = 0, inkAt = { seg: -1, d: 0 }, running = false, visible = true, last = 0, speedMul = 1;
+    const st = { j: { a1: 0, a2: 0, phi: 0 }, z: 1, k: 'wait', drawing: false, ch: -1, si: -1, progress: 0, done: false, t: 0 };
+
+    function setText(text) {
+      const maxWidth = cfg.wrap ? cfg.wrap(W || stage.clientWidth) : Infinity;
+      layout = cfg.layout || layoutText(text, { maxWidth, tracking: cfg.tracking ?? 2.4 });
+      plan = buildPlan(layout, cfg);
+      api.plan = plan;
+      api.layout = layout;
+      cfg.onPlan && cfg.onPlan(plan, api);
+      resize(true);
+      restart();
+    }
+
+    function restart() {
+      t = reduce ? plan.total + 0.01 : 0;
+      segIdx = 0;
+      inkAt = { seg: -1, d: 0 };
+      inkX.clearRect(0, 0, W, H);
+      st.done = false;
+      tick(0);
+      if (cfg.autoplay !== false) kick();
+    }
+
+    function resize(force) {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      const r = Math.min(root.devicePixelRatio || 1, 2);
+      if (!force && w === W && h === H && r === dpr) return;
+      const rewrap = cfg.wrap && w !== W && W !== 0 && cfg.wrap(w) !== cfg.wrap(W);
+      W = w; H = h; dpr = r;
+      if (rewrap) { setText(layout.text); return; }
+      for (const c of [bgC, inkC, armC]) {
+        if (!c) continue;
+        c.width = Math.round(W * dpr);
+        c.height = Math.round(H * dpr);
+      }
+      for (const x of [bgX, inkX, armX]) if (x) x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!plan) return;
+      geom = cfg.geometry(W, H, layout);
+      api.geom = geom;
+      if (bgX) { bgX.clearRect(0, 0, W, H); cfg.bg(bgX, geom, api); }
+      // replay the ink drawn so far at the new size
+      inkX.clearRect(0, 0, W, H);
+      inkAt = { seg: -1, d: 0 };
+      tick(0);
+    }
+
+    function locate() {
+      const segs = plan.segs;
+      if (segIdx >= segs.length) segIdx = segs.length - 1;
+      while (segIdx > 0 && t < segs[segIdx].t0) segIdx--;
+      while (segIdx < segs.length - 1 && t >= segs[segIdx].t0 + segs[segIdx].dur) segIdx++;
+      return segs[segIdx];
+    }
+
+    const jointsFor = (where) => solve(geom, where.home ? geom.home : geom.px(where));
+
+    function evalPlanar(seg, u) {
+        let j, tipPx = null;
+        if (seg.k === 'wait') {
+          j = jointsFor(seg.at); st.z = 1;
+        } else if (seg.k === 'move') {
+          const a = jointsFor(seg.from), b = jointsFor(seg.to);
+          const e = ease(u);
+          const a1 = unwrapTo(b.a1, a.a1), phi = unwrapTo(b.phi, a.phi);
+          j = { a1: a.a1 + (a1 - a.a1) * e, a2: a.a2 + (b.a2 - a.a2) * e, phi: a.phi + (phi - a.phi) * e };
+          st.z = 1;
+          if (seg.last && t >= seg.t0 + seg.dur) st.done = true;
+        } else if (seg.k === 'down' || seg.k === 'up') {
+          tipPx = geom.px(seg.at);
+          st.z = seg.k === 'down' ? 1 - ease(u) : ease(u);
+        } else {
+          const p = pointAt(seg.stroke, clamp(u, 0, 1) * seg.stroke.len);
+          tipPx = geom.px(p);
+          st.z = 0;
+          st.drawing = true;
+        }
+        if (tipPx) j = solve(geom, tipPx);
+        if (t >= plan.total) {
+          st.done = true;
+          if (!reduce) {
+            // idle: the servos hold position with a barely visible hunt
+            const s = t - plan.total;
+            j.a1 += 0.006 * Math.sin(s * 0.9);
+            j.a2 += 0.009 * Math.sin(s * 0.7 + 1.3);
+          }
+        }
+        st.j = j;
+        fk(geom, j, st);
+        if (tipPx) st.tip = tipPx;
+        st.base = geom.base;
+    }
+
+    /* Articulated arm: plan the pen tip in millimetres (x right, y forward, z up), solve the four
+       joints, then project every joint into the flat plan-oblique view. */
+    function evalArticulated(seg, u) {
+      const d = geom.d;
+      const at = (where, z) => (where.home ? { ...d.home } : { ...geom.toMM(geom.px(where)), z });
+      let tip;
+      if (seg.k === 'wait') tip = at(seg.at);
+      else if (seg.k === 'move') {
+        const a = at(seg.from, d.lift), b = at(seg.to, d.lift), e = ease(u);
+        const hop = Math.sin(Math.PI * u) * Math.min(5, Math.hypot(b.x - a.x, b.y - a.y) * 0.05);
+        tip = { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, z: a.z + (b.z - a.z) * e + hop };
+      } else if (seg.k === 'down') tip = at(seg.at, d.lift * (1 - ease(u)));
+      else if (seg.k === 'up') tip = at(seg.at, d.lift * ease(u));
+      else {
+        tip = at(pointAt(seg.stroke, u * seg.stroke.len), 0);
+        st.drawing = true;
+      }
+      const j = artSolve(tip.x, tip.y, tip.z, d);
+      if (t >= plan.total) {
+        st.done = true;
+        if (!reduce) {
+          const s = t - plan.total;
+          j.q2 += 0.004 * Math.sin(s * 0.9);
+          j.q3 += 0.006 * Math.sin(s * 0.7 + 1.3);
+          j.q4 = -Math.PI / 2 - j.q2 - j.q3;
+        }
+      }
+      const F = artFK(j, d);
+      st.j = j;
+      st.joints = { j1: deg(j.yaw), j2: deg(j.q2), j3: deg(j.q3), j4: deg(j.q4) };
+      st.p3 = F;
+      st.tip3 = F.tip;
+      st.z = clamp(F.tip.z / d.lift, 0, 1);
+      st.base = geom.base;
+      st.shoulder = geom.project(F.shoulder);
+      st.elbow = geom.project(F.elbow);
+      st.wrist = geom.project(F.wrist);
+      st.tip = geom.project(F.tip);
+      if (st.drawing) st.tip = geom.px(pointAt(seg.stroke, u * seg.stroke.len));
+    }
+
+    function evaluate() {
+      const seg = locate();
+      const u = seg.dur ? (t - seg.t0) / seg.dur : 1;
+      st.k = seg.k;
+      st.drawing = false;
+      st.si = seg.si ?? -1;
+      st.ch = seg.stroke ? seg.stroke.ch : -1;
+      if (geom.kin === 'art') evalArticulated(seg, clamp(u, 0, 1));
+      else evalPlanar(seg, u);
+      st.t = t;
+      st.seg = seg;
+      let drawn = 0;
+      if (seg.k === 'draw') drawn = seg.len0 + clamp(u, 0, 1) * seg.stroke.len;
+      else for (let i = segIdx; i >= 0; i--) {
+        const g = plan.segs[i];
+        if (g.k === 'draw') { drawn = g.len0 + g.stroke.len; break; }
+      }
+      st.drawn = drawn;
+      st.progress = st.done ? 1 : drawn / (plan.totalLen || 1);
+    }
+
+    /* Draw newly laid ink: everything between the last ink cursor and the current time. */
+    function laySegmentInk() {
+      const segs = plan.segs;
+      let i = Math.max(0, inkAt.seg);
+      for (; i < segs.length && segs[i].t0 <= t; i++) {
+        const g = segs[i];
+        if (g.k !== 'draw') continue;
+        const dEnd = clamp((t - g.t0) / g.dur, 0, 1) * g.stroke.len;
+        const d0 = i === inkAt.seg ? inkAt.d : 0;
+        if (dEnd > d0 + 1e-6) {
+          const pts = slice(g.stroke, d0, dEnd).map(geom.px);
+          cfg.ink(inkX, pts, { start: d0 === 0, end: dEnd >= g.stroke.len - 1e-6, stroke: g.stroke, geom, api });
+        }
+        inkAt = { seg: i, d: dEnd };
+      }
+    }
+
+    function tick(dt) {
+      t += dt;
+      evaluate();
+      laySegmentInk();
+      armX.clearRect(0, 0, W, H);
+      cfg.arm(armX, st, geom, api);
+      cfg.frame && cfg.frame(st, api);
+    }
+
+    function loop(now) {
+      if (!running) return;
+      const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 0;
+      last = now;
+      tick(dt * speedMul);
+      if (reduce && st.done) { running = false; return; }
+      requestAnimationFrame(loop);
+    }
+
+    function kick() {
+      if (running || !visible) return;
+      running = true;
+      last = 0;
+      requestAnimationFrame(loop);
+    }
+
+    const api = {
+      setText, restart, kick,
+      seek(T) { t = T; segIdx = 0; inkAt = { seg: -1, d: 0 }; inkX.clearRect(0, 0, W, H); tick(0); },
+      refresh() { resize(true); },
+      scrub(f) { api.seek(clamp(f, 0, 1) * plan.total); },
+      play() { cfg.autoplay = true; restart(); },
+      get t() { return t; },
+      set speed(v) { speedMul = v; },
+      get speed() { return speedMul; },
+      state: st,
+      trail(units) {
+        const g = st.seg;
+        if (!g || g.k !== 'draw') return null;
+        const d = clamp((t - g.t0) / g.dur, 0, 1) * g.stroke.len;
+        return slice(g.stroke, Math.max(0, d - units), d).map(geom.px);
+      },
+      reducedMotion: reduce
+    };
+
+    new ResizeObserver(() => resize(false)).observe(stage);
+    if ('IntersectionObserver' in root) {
+      new IntersectionObserver((es) => {
+        visible = es[es.length - 1].isIntersecting;
+        if (visible && cfg.autoplay !== false) kick(); else running = false;
+      }).observe(stage);
+    }
+    W = stage.clientWidth; H = stage.clientHeight;
+    setText(cfg.text);
+    return api;
+  }
+
+  /* ── Drawing helpers shared by the renderers ───────────────────────────────────────── */
+
+  /* Outline of two circles joined by their outer tangents (a tapered link). */
+  function capsule(ctx, P, r1, Q, r2) {
+    const dx = Q.x - P.x, dy = Q.y - P.y, d = Math.hypot(dx, dy) || 1e-6;
+    const th = Math.atan2(dy, dx);
+    const b = Math.acos(clamp((r1 - r2) / d, -1, 1));
+    ctx.moveTo(P.x + r1 * Math.cos(th + b), P.y + r1 * Math.sin(th + b));
+    ctx.lineTo(Q.x + r2 * Math.cos(th + b), Q.y + r2 * Math.sin(th + b));
+    ctx.arc(Q.x, Q.y, r2, th + b, th - b, true);
+    ctx.lineTo(P.x + r1 * Math.cos(th - b), P.y + r1 * Math.sin(th - b));
+    ctx.arc(P.x, P.y, r1, th - b, th + b - TAU, true);
+    ctx.closePath();
+  }
+
+  /* Render text with the stroke font as plain polylines (for labels drawn on canvas). */
+  function strokeText(ctx, text, x, y, size, opts = {}) {
+    const lay = layoutText(text, { tracking: opts.tracking ?? 3 });
+    const s = size / 10;
+    const ax = opts.align === 'center' ? lay.width / 2 : opts.align === 'right' ? lay.width : 0;
+    ctx.beginPath();
+    for (const st of lay.strokes) {
+      st.pts.forEach((p, i) => {
+        const X = x + (p.x - ax) * s, Y = y + (p.y - 10) * s;
+        i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
+      });
+    }
+    ctx.stroke();
+  }
+
+  root.Plotter = { create, layoutText, drawingLayout, buildPlan, standardGeometry, articulatedGeometry, artSolve, artFK, ART, ik2, capsule, strokeText, normalize, pointAt, FONT };
+})(window);
+</script>
+<script>
+  /* Settings: the title the arm writes, the voting link, and the address the QR code opens.
+     Leave SITE_URL empty to use the page's own address once it is hosted. */
+  const TITLE = 'Real-Time Robotic Portrait Drawing System';
+  const VOTE_URL = '#';
+  const SITE_URL = '';
+  const ARM_AT_TOP = false;   // true: arm across the table, writing below it; false: arm below the title
+
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    $('siteTitle').textContent = TITLE;
+    const TAU = Math.PI * 2;
+    const PINK = '#f2a594', PINK_EDGE = '#dc8776', PINK_LIGHT = '#f8c2b5';
+    const GOLD = '#c18e1f';
+
+    /* ── arm ──────────────────────────────────────────────────────────────── */
+    function drawInk(ctx, pts, info) {
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = Math.max(2, info.geom.scale * 0.42);
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.stroke();
+    }
+
+    function shadowOn(ctx, blur = 14, y = 7) {
+      ctx.shadowColor = 'rgba(40, 24, 20, 0.16)';
+      ctx.shadowBlur = blur;
+      ctx.shadowOffsetY = y;
+    }
+
+    function link(ctx, A, r1, B, r2) {
+      ctx.save();
+      shadowOn(ctx);
+      ctx.beginPath();
+      Plotter.capsule(ctx, A, r1, B, r2);
+      ctx.fillStyle = PINK;
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = PINK_EDGE;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      // the rounded top face of the printed link catches the light
+      ctx.beginPath();
+      Plotter.capsule(ctx, A, r1 * 0.5, B, r2 * 0.5);
+      ctx.fillStyle = PINK_LIGHT;
+      ctx.fill();
+    }
+
+    function disc(ctx, c, r, fill, edge, shadow) {
+      ctx.save();
+      if (shadow) shadowOn(ctx, 18, 9);
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, r, 0, TAU);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.restore();
+      if (edge) { ctx.strokeStyle = edge; ctx.lineWidth = 1.2; ctx.stroke(); }
+    }
+
+    function drawArm(ctx, st, g) {
+      const { base, shoulder, elbow, wrist } = st, P = g.P;
+      // round base and turret
+      disc(ctx, base, 58 * P, PINK, PINK_EDGE, true);
+      disc(ctx, base, 42 * P, PINK_LIGHT, PINK_EDGE, false);
+      // two equal links, always in line with the pen
+      link(ctx, elbow, 15 * P, wrist, 12 * P);
+      link(ctx, shoulder, 18 * P, elbow, 16 * P);
+      // shoulder hub, elbow bearing, pen holder
+      disc(ctx, shoulder, 12 * P, PINK, PINK_EDGE, false);
+      disc(ctx, elbow, 8 * P, '#dadada', '#b9b9b9', false);
+      disc(ctx, elbow, 3.5 * P, '#9c9c9c', null, false);
+      const lift = st.z;
+      ctx.save();
+      shadowOn(ctx, 8 + lift * 8, 4 + lift * 6);
+      ctx.beginPath();
+      ctx.arc(wrist.x, wrist.y, 10 * P, 0, TAU);
+      ctx.fillStyle = PINK;
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = PINK_EDGE;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      disc(ctx, wrist, 4.5 * P, PINK_EDGE, null, false);
+    }
+
+    // the 3D build of this page defines createHero3D; without it (or without WebGL) the 2D hero runs
+    const duration = (chars) => Math.max(5, Math.min(16, 3 + 0.34 * chars));
+    const p = (window.createHero3D && window.createHero3D($('stage'), { text: TITLE, duration })) || Plotter.create($('stage'), {
+      text: TITLE,
+      wrap: () => 150,
+      duration,
+      geometry: (W, H, box) => Plotter.articulatedGeometry(W, H, box, {
+        textY: 150, textMaxW: 290, textMaxH: 110, padTop: 18, padBottom: 18, padX: W < 520 ? 4 : 18, maxTextPx: 980,
+        flip: ARM_AT_TOP, armPad: ARM_AT_TOP ? 4 : 20, vAlign: ARM_AT_TOP ? 0.85 : 0.5,
+        dims: { home: { x: (ARM_AT_TOP ? -1 : 1) * (W < 520 ? 118 : 150), y: 20, z: 8 } }
+      }),
+      ink: drawInk,
+      arm: drawArm
+    });
+    window.plotter = p;
+
+    $('plotForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $('plotText').value.trim();
+      if (v) p.setText(v);
+    });
+    $('replay').addEventListener('click', () => p.restart());
+
+    /* ── vote and QR ──────────────────────────────────────────────────────── */
+    const vote = $('voteLink');
+    if (VOTE_URL === '#') {
+      vote.title = 'The voting link has not been set yet';
+      vote.addEventListener('click', (e) => e.preventDefault());
+    } else {
+      vote.href = VOTE_URL;
+      vote.removeAttribute('aria-disabled');
+      vote.target = '_blank';
+      vote.rel = 'noreferrer';
+    }
+
+    const embedded = window.self !== window.top;
+    const own = /^https?:/.test(location.protocol) && !embedded ? location.href.split('#')[0] : '';
+    const url = SITE_URL || own;
+    const box = $('qr');
+    if (url && window.qrcode) {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      box.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+      $('siteUrl').textContent = url;
+    } else {
+      box.classList.add('empty');
+      box.textContent = 'QR code appears on the hosted page';
+      $('siteUrl').textContent = 'Set SITE_URL in the page script to fix the address.';
+    }
+  })();
+</script>
+
+</body>
+</html>

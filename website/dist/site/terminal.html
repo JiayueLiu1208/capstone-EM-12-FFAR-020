@@ -1,0 +1,1183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arm Plotter Terminal</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=VT323&display=swap">
+<style>
+  /* Layout: an operator's terminal. A vector monitor shows the arm in amber wireframe beside a live
+     G-code stream; the rest of the site is a shell session of commands and their output. */
+  :root {
+    --crt: #0e0a06;          /* warm black */
+    --panel: #17110a;        /* recessed panels */
+    --amber: #ffb340;        /* phosphor */
+    --amber-dim: #b07a2c;    /* secondary output */
+    --amber-faint: rgba(255, 179, 64, 0.16);
+    --hot: #fff0d2;          /* beam spot, current line */
+    --f-display: 'VT323', 'Courier New', monospace;
+    --f-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--crt); }
+  body {
+    margin: 0;
+    background: var(--crt);
+    color: var(--amber);
+    font: 400 15px/1.65 var(--f-mono);
+    -webkit-font-smoothing: antialiased;
+    text-shadow: 0 0 6px rgba(255, 160, 40, 0.28);
+  }
+  ::selection { background: var(--amber); color: var(--crt); }
+  a { color: var(--hot); text-underline-offset: 3px; }
+  a:hover { background: var(--amber); color: var(--crt); text-decoration: none; }
+  :focus-visible { outline: 1px dashed var(--hot); outline-offset: 3px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .gutter {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .inner { max-width: 1180px; margin: 0 auto; }
+  .dim { color: var(--amber-dim); }
+
+  body::before { content: ''; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--amber); }
+  .status {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--amber);
+    color: var(--crt);
+    text-shadow: none;
+    font-size: 13px;
+  }
+  .status .inner { display: flex; justify-content: space-between; gap: 16px; padding-block: 3px; white-space: nowrap; overflow: hidden; }
+  .status nav { display: flex; gap: 16px; }
+  .status a { color: var(--crt); text-decoration: none; }
+  .status a:hover { background: var(--crt); color: var(--amber); }
+
+  .cmd { margin: 0; word-break: break-word; }
+  .cmd::before { content: 'operator@arm:~/placeholder$ '; color: var(--amber-dim); }
+  main { padding-block: 26px 40px; }
+
+  /* monitor */
+  .monitor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    margin-top: 14px;
+    border: 1px solid var(--amber-dim);
+    background: #0a0704;
+    box-shadow: 0 0 0 4px var(--panel), 0 0 40px rgba(255, 150, 30, 0.08);
+  }
+  .screen { position: relative; min-width: 0; border-right: 1px solid var(--amber-dim); }
+  .stage { position: relative; height: clamp(380px, 44vw, 580px); overflow: hidden; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .stage .pl-ink, .stage .pl-arm { filter: drop-shadow(0 0 2px rgba(255, 179, 64, 0.9)) drop-shadow(0 0 9px rgba(255, 140, 30, 0.45)); }
+  .scan {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%),
+      repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.24) 0 1px, transparent 1px 3px);
+  }
+  .screen .tag { position: absolute; left: 12px; top: 8px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .gcode { display: flex; flex-direction: column; min-width: 0; background: var(--panel); }
+  .gc-head { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--amber-dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .gc-body { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; padding: 6px 0; min-height: 0; }
+  .gc-body ol { margin: 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.55; font-variant-numeric: tabular-nums; }
+  .gc-body li { padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gc-body li .n { color: var(--amber-dim); margin-right: 8px; }
+  .gc-body li .c { color: var(--amber-dim); }
+  .gc-body li.cur { background: var(--amber-faint); color: var(--hot); }
+  .gc-foot { padding: 8px 12px; border-top: 1px solid var(--amber-dim); font-size: 12px; }
+  .bar { height: 6px; margin-top: 6px; border: 1px solid var(--amber-dim); }
+  .bar i { display: block; height: 100%; width: 0; background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+
+  .prompt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 18px; }
+  .prompt .line { display: flex; align-items: center; flex: 1 1 420px; min-width: 0; }
+  .prompt .line::before { content: 'operator@arm:~/placeholder$ plot "'; color: var(--amber-dim); white-space: pre; }
+  .prompt .line::after { content: '"'; color: var(--amber-dim); }
+  .prompt input {
+    flex: 1;
+    min-width: 60px;
+    padding: 2px 0;
+    border: 0;
+    border-bottom: 1px dashed var(--amber-dim);
+    background: transparent;
+    color: var(--hot);
+    font: 500 15px var(--f-mono);
+    text-transform: uppercase;
+    caret-color: var(--hot);
+  }
+  .prompt input:focus { outline: none; border-bottom-color: var(--hot); }
+  .btn {
+    padding: 3px 10px;
+    border: 1px solid var(--amber);
+    background: transparent;
+    color: var(--amber);
+    font: 500 13px var(--f-mono);
+    cursor: pointer;
+    text-shadow: inherit;
+  }
+  .btn:hover, .btn[aria-pressed="true"] { background: var(--amber); color: var(--crt); text-shadow: none; }
+  .speeds { display: flex; align-items: center; gap: 6px; }
+
+  /* shell sections */
+  section { margin-top: 52px; }
+  .out { margin-top: 10px; padding-left: 18px; border-left: 1px solid var(--amber-faint); }
+  .out h2 { margin: 0 0 8px; font: 400 clamp(36px, 5vw, 56px)/0.95 var(--f-display); color: var(--hot); letter-spacing: 0.01em; text-wrap: balance; }
+  .out h2::before { content: '# '; color: var(--amber-dim); }
+  .out p { margin: 0 0 12px; max-width: 72ch; }
+  .lede { font-size: 17px; color: var(--hot); }
+  .steps { margin: 0; padding: 0; list-style: none; }
+  .steps li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 8px; padding: 6px 0; }
+  .steps .ok { color: var(--hot); }
+  .eq { margin: 6px 0; padding: 8px 12px; background: var(--panel); overflow-x: auto; white-space: nowrap; }
+  .watch { display: flex; flex-wrap: wrap; gap: 4px 26px; margin-top: 12px; padding: 10px 12px; border: 1px dashed var(--amber-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .watch b { font-weight: 500; color: var(--hot); }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; }
+  th { text-align: left; font-weight: 400; color: var(--amber-dim); padding: 2px 28px 6px 0; }
+  td { padding: 3px 28px 3px 0; vertical-align: top; }
+  .log { margin: 0; padding: 0; list-style: none; }
+  .log li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 14px; padding: 3px 0; }
+  .log .h { color: var(--amber-dim); }
+  .log .ref { color: var(--hot); }
+  .team { margin: 0; padding: 0; list-style: none; }
+  .team li { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 14px; padding: 3px 0; }
+  .links { display: flex; flex-wrap: wrap; gap: 6px 28px; }
+  .cursor::after { content: '█'; margin-left: 2px; animation: blink 1.1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  @keyframes flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.965; } }
+  .stage { animation: flicker 0.16s infinite; }
+  @media (prefers-reduced-motion: reduce) { .cursor::after, .stage { animation: none; } }
+
+  @media (max-width: 880px) {
+    .monitor { grid-template-columns: minmax(0, 1fr); }
+    .screen { border-right: 0; border-bottom: 1px solid var(--amber-dim); }
+    .gc-body { height: 170px; flex: none; }
+    .status nav { display: none; }
+  }
+  @media (max-width: 560px) {
+    body { font-size: 14px; }
+    .cmd::before { content: '$ '; }
+    .prompt .line::before { content: '$ plot "'; }
+    .out { padding-left: 12px; }
+    .log li { grid-template-columns: 70px minmax(0, 1fr); }
+    .log li .d { grid-column: 2; color: var(--amber-dim); }
+    .team li { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 6px 0; }
+    .steps li { grid-template-columns: 48px minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="status gutter">
+  <div class="inner">
+    <span>[<span id="sessName">placeholder</span>] 0:plot*</span>
+    <nav aria-label="Sections">
+      <a href="#readme">1:readme</a>
+      <a href="#explain">2:pipeline</a>
+      <a href="#ik">3:ik</a>
+      <a href="#bom">4:bom</a>
+      <a href="#log">5:log</a>
+      <a href="#team">6:team</a>
+    </nav>
+    <span>tty0 · 2026-10-16</span>
+  </div>
+</div>
+
+<main class="gutter">
+  <div class="inner">
+    <h1 class="sr-only" id="siteTitle">Placeholder</h1>
+    <p class="cmd" id="heroCmd">./plot --font single-stroke --pen 0.5 "PLACEHOLDER"</p>
+
+    <div class="monitor">
+      <div class="screen">
+        <div class="stage" id="stage"></div>
+        <div class="scan" aria-hidden="true"></div>
+        <span class="tag dim">vector display · ch1</span>
+      </div>
+      <aside class="gcode" aria-label="G-code stream">
+        <div class="gc-head"><span>gcode ▸ stream</span><span id="gcCount">0/0</span></div>
+        <div class="gc-body"><ol id="gcList"></ol></div>
+        <div class="gc-foot">
+          <div style="display:flex;justify-content:space-between;gap:8px"><span id="gcState">pen up · homing</span><span id="gcPct">0%</span></div>
+          <div class="bar" aria-hidden="true"><i id="gcBar"></i></div>
+        </div>
+      </aside>
+    </div>
+
+    <form class="prompt" id="plotForm">
+      <label class="line" for="plotText"><span class="sr-only">Text to plot</span><input id="plotText" maxlength="24" autocomplete="off" spellcheck="false"></label>
+      <button class="btn" type="submit">run ⏎</button>
+      <button class="btn" type="button" id="replay">replay</button>
+      <span class="speeds" role="group" aria-label="Playback speed"><span class="dim">--speed</span>
+        <button class="btn" type="button" data-speed="1" aria-pressed="true">1x</button>
+        <button class="btn" type="button" data-speed="2" aria-pressed="false">2x</button>
+        <button class="btn" type="button" data-speed="4" aria-pressed="false">4x</button>
+      </span>
+    </form>
+
+    <section id="readme">
+      <p class="cmd">cat README.md</p>
+      <div class="out">
+        <h2 id="readmeTitle">Placeholder</h2>
+        <p class="lede">A four-axis robotic arm that turns typed text into pen strokes on paper.</p>
+        <p>The base turns (θ1), the shoulder and elbow pitch the two links (θ2, θ3), and the wrist (θ4) keeps the pen pointing straight down. All four joints are hobby servos. A planner on the laptop turns text into single-line strokes, solves the joint angles for every point, and streams them to an Arduino over USB serial.</p>
+        <p>The display above runs the same planner and kinematics, drawn from directly above: the elbow is a single hinge, so both links always line up with the pen. The G-code on the right is generated from the real motion plan as the arm moves: G0 travels with the pen 12 mm up, G1 Z0 puts it down, G1 X Y draws.</p>
+      </div>
+    </section>
+
+    <section id="explain">
+      <p class="cmd">./plot --explain</p>
+      <div class="out">
+        <h2>Pipeline</h2>
+        <ol class="steps">
+          <li><span class="dim">[1/5]</span><span><span class="ok">text</span>: read the word from the prompt or the command line</span></li>
+          <li><span class="dim">[2/5]</span><span><span class="ok">glyphs</span>: map each letter to single-line strokes on a 10-unit cap height</span></li>
+          <li><span class="dim">[3/5]</span><span><span class="ok">plan</span>: order strokes, reverse them where it cuts pen-up travel, resample every 0.5 mm</span></li>
+          <li><span class="dim">[4/5]</span><span><span class="ok">solve</span>: inverse kinematics, (x, y, z) → (θ1, θ2, θ3, θ4) for every sample</span></li>
+          <li><span class="dim">[5/5]</span><span><span class="ok">drive</span>: angles → PWM on four channels at 50 Hz; pen lifts 12 mm in z between strokes</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="ik">
+      <p class="cmd">ik --watch --l 150 --h0 96 --lt 96</p>
+      <div class="out">
+        <h2>Kinematics</h2>
+        <div class="eq">θ1 = atan2(x, y)                                   <span class="dim"># base</span></div>
+        <div class="eq">r = hypot(x, y);  h = z + Lt − h0                 <span class="dim"># Lt = h0, so h = z</span></div>
+        <div class="eq">β = acos(hypot(r, h) / (2·L))                     <span class="dim"># equal links: isosceles</span></div>
+        <div class="eq">θ2 = atan2(h, r) + β;  θ3 = −2·β                  <span class="dim"># elbow up</span></div>
+        <div class="eq">θ4 = −90° − θ2 − θ3                                <span class="dim"># pen stays vertical</span></div>
+        <div class="watch" aria-label="Live joint values">
+          <span>θ1=<b id="wT1">0.00</b>°</span><span>θ2=<b id="wT2">0.00</b>°</span><span>θ3=<b id="wT3">0.00</b>°</span><span>θ4=<b id="wT4">0.00</b>°</span><span>xyz=<b id="wXYZ">0, 0, 0</b>mm</span><span>pen=<b id="wPen">UP</b></span>
+        </div>
+      </div>
+    </section>
+
+    <section id="bom">
+      <p class="cmd">column -t -s, bom.csv</p>
+      <div class="out scroll">
+        <table>
+          <thead><tr><th>qty</th><th>part</th><th>spec</th></tr></thead>
+          <tbody>
+            <tr><td>3</td><td>joint servo (base, shoulder, elbow)</td><td>MG996R, 11 kg·cm @ 6 V</td></tr>
+            <tr><td>1</td><td>wrist servo</td><td>MG90S</td></tr>
+            <tr><td>1</td><td>microcontroller</td><td>Arduino Nano (ATmega328P)</td></tr>
+            <tr><td>1</td><td>servo driver</td><td>PCA9685, 16 ch, 12-bit</td></tr>
+            <tr><td>2</td><td>arm links + turret</td><td>PLA, 150 mm centres</td></tr>
+            <tr><td>5</td><td>bearings</td><td>1 × 51107 thrust, 4 × 608ZZ</td></tr>
+            <tr><td>1</td><td>power supply</td><td>6 V DC, 5 A</td></tr>
+            <tr><td>1</td><td>pen</td><td>0.5 mm fineliner, sprung holder</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="log">
+      <p class="cmd">git log --oneline --date=short</p>
+      <div class="out">
+        <ol class="log">
+          <li><span class="h">a3f9c21</span><span><span class="ref">(HEAD → main)</span> elbow backlash compensation; first legible word</span><span class="d dim">2026-10-16</span></li>
+          <li><span class="h">6be0d47</span><span>wire font, planner and IK end to end</span><span class="d dim">2026-10-02</span></li>
+          <li><span class="h">19c4e8a</span><span>move servo power to a separate 6 V rail (brown-outs)</span><span class="d dim">2026-09-25</span></li>
+          <li><span class="h">f02b7d3</span><span>calibrate all four servos with protractor jig</span><span class="d dim">2026-09-18</span></li>
+          <li><span class="h">8d41a90</span><span>four-axis kinematic model and reach study</span><span class="d dim">2026-09-04</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="team">
+      <p class="cmd">finger @team</p>
+      <div class="out">
+        <ul class="team">
+          <li><span class="ok" style="color:var(--hot)">Your Name</span><span>mechanical design, CAD, printing</span></li>
+          <li><span style="color:var(--hot)">Teammate</span><span>software, path planning, kinematics</span></li>
+          <li><span style="color:var(--hot)">Teammate</span><span>electronics, power, firmware</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <p class="cmd">ls links/</p>
+      <div class="out links">
+        <a href="#" title="Add your repository link">source-code/</a>
+        <a href="#" title="Add your report link">report.pdf</a>
+        <a href="#" title="Add your video link">demo-video.mp4</a>
+      </div>
+    </section>
+
+    <section>
+      <p class="cmd cursor"></p>
+    </section>
+  </div>
+</main>
+
+<script>
+/*
+ * plotter.js: the shared drawing engine behind every version of the site.
+ *
+ *   text ─▶ single-stroke font ─▶ ordered strokes ─▶ timeline ─▶ inverse kinematics ─▶ canvas
+ *
+ * Each page supplies its own geometry and renderers (background, ink, arm); the engine owns
+ * the font, the motion plan, the kinematics, and the animation loop.
+ */
+(function (root) {
+  'use strict';
+
+  const TAU = Math.PI * 2;
+  const D2R = Math.PI / 180;
+  const hyp = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  /* ── Single-stroke font ─────────────────────────────────────────────────────────────
+   * Cap height is 10 units and y grows downward (0 = cap line, 10 = baseline).
+   * Each glyph is [advance width, ...strokes]. A stroke is a list of tokens:
+   *   "x,y"                  a point
+   *   "@cx,cy,rx,ry,a0,a1"   an elliptical arc sampled from angle a0 to a1 (degrees)
+   */
+  const DOT = (x, y) => `@${x},${y},0.38,0.38,0,360`;
+  const GLYPHS = {
+    A: [7, '0,10 3.5,0 7,10', '1.3,6.5 5.7,6.5'],
+    B: [6.5, '0,10 0,0 3.5,0 @3.5,2.5,2.5,2.5,-90,90 0,5', '0,5 4,5 @4,7.5,2.5,2.5,-90,90 0,10'],
+    C: [6.2, '@3.5,5,3.5,5,-42,-318'],
+    D: [6.5, '0,0 0,10 2.5,10 @2.5,5,4,5,90,-90 0,0'],
+    E: [5.5, '5.5,0 0,0 0,10 5.5,10', '0,5 4.5,5'],
+    F: [5.5, '5.5,0 0,0 0,10', '0,5 4.5,5'],
+    G: [7, '@3.5,5,3.5,5,-42,-360 4,5'],
+    H: [6, '0,0 0,10', '6,0 6,10', '0,5 6,5'],
+    I: [0, '0,0 0,10'],
+    J: [5, '5,0 5,7.2 @2.5,7.2,2.5,2.8,0,180'],
+    K: [6, '0,0 0,10', '6,0 0,6.2', '2.1,4.1 6,10'],
+    L: [5, '0,0 0,10 5,10'],
+    M: [7.5, '0,10 0,0 3.75,7 7.5,0 7.5,10'],
+    N: [6, '0,10 0,0 6,10 6,0'],
+    O: [7, '@3.5,5,3.5,5,-90,270'],
+    P: [6, '0,10 0,0 3.5,0 @3.5,2.75,2.5,2.75,-90,90 0,5.5'],
+    Q: [7, '@3.5,5,3.5,5,-90,270', '4.3,7.3 7,10.2'],
+    R: [6, '0,10 0,0 3.5,0 @3.5,2.75,2.5,2.75,-90,90 0,5.5', '3.2,5.5 6,10'],
+    S: [6, '@3,2.5,2.8,2.5,-15,-270 @3,7.5,3,2.5,-90,165'],
+    T: [6, '0,0 6,0', '3,0 3,10'],
+    U: [6, '0,0 0,7 @3,7,3,3,180,0 6,0'],
+    V: [7, '0,0 3.5,10 7,0'],
+    W: [9.5, '0,0 2.3,10 4.75,2.5 7.2,10 9.5,0'],
+    X: [6.5, '0,0 6.5,10', '6.5,0 0,10'],
+    Y: [6.5, '0,0 3.25,5 6.5,0', '3.25,5 3.25,10'],
+    Z: [6, '0,0 6,0 0,10 6,10'],
+    0: [6, '@3,5,3,5,-90,270'],
+    1: [3, '0.6,2.2 3,0 3,10'],
+    2: [6, '@3,3,3,3,-165,20 0,10 6,10'],
+    3: [6, '@3,2.5,2.8,2.5,-160,90 @3,7.5,3,2.5,-90,160'],
+    4: [6.5, '4.5,10 4.5,0 0,7 6.5,7'],
+    5: [6, '5.6,0 0.8,0 0.4,4.6 @3,6.9,3,3.1,-140,150'],
+    6: [6, '@3.3,5,3.1,5,-55,-180 0.2,7 @3,7,2.8,3,180,540'],
+    7: [6, '0,0 6,0 2.2,10'],
+    8: [6, '@3,2.6,2.6,2.4,90,450 @3,7.5,3,2.5,-90,270'],
+    9: [6, '@3,3,2.8,3,0,360 5.8,5 @3,5,2.8,5,0,125'],
+    ' ': [4.5],
+    '-': [4, '0,5.5 4,5.5'],
+    '_': [6, '0,10.6 6,10.6'],
+    '.': [0.8, DOT(0.4, 9.6)],
+    ',': [1, '0.8,9.2 0,11.6'],
+    '!': [0.8, '0.4,0 0.4,7', DOT(0.4, 9.6)],
+    '?': [5, '@2.5,2.5,2.5,2.5,-170,90 2.5,7', DOT(2.5, 9.6)],
+    "'": [0, '0,0 0,2.8'],
+    ':': [0.8, DOT(0.4, 3.6), DOT(0.4, 9.6)],
+    '/': [5, '0,10.5 5,-0.5'],
+    '+': [5, '0,5.5 5,5.5', '2.5,3 2.5,8'],
+    '=': [5, '0,4 5,4', '0,7 5,7'],
+    '(': [2, '@4.5,5,4.5,6.5,-130,-230'],
+    ')': [2, '@-2.5,5,4.5,6.5,-50,50'],
+    '#': [6.5, '2,0 1,10', '5.5,0 4.5,10', '0,3.5 6.5,3.5', '0,6.5 6.5,6.5']
+  };
+
+  function parseStroke(src) {
+    const raw = [];
+    for (const tok of src.trim().split(/\s+/)) {
+      if (tok[0] === '@') {
+        const [cx, cy, rx, ry, a0, a1] = tok.slice(1).split(',').map(Number);
+        const n = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 7));
+        for (let i = 0; i <= n; i++) {
+          const a = (a0 + ((a1 - a0) * i) / n) * D2R;
+          raw.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+        }
+      } else {
+        const [x, y] = tok.split(',').map(Number);
+        raw.push({ x, y });
+      }
+    }
+    const pts = [raw[0]];
+    for (let i = 1; i < raw.length; i++) if (hyp(raw[i], pts[pts.length - 1]) > 1e-4) pts.push(raw[i]);
+    return pts;
+  }
+
+  const FONT = {};
+  for (const ch in GLYPHS) {
+    const [w, ...strokes] = GLYPHS[ch];
+    FONT[ch] = { w, strokes: strokes.map(parseStroke) };
+  }
+
+  const normalize = (text) =>
+    String(text).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const glyph = (ch) => FONT[ch] || FONT[' '];
+
+  function measure(s, tracking) {
+    let w = 0;
+    for (const ch of s) w += glyph(ch).w + tracking;
+    return Math.max(0, w - tracking);
+  }
+
+  /* Lay text out in font units, wrapping on spaces when a line would pass maxWidth. */
+  function layoutText(text, { maxWidth = Infinity, tracking = 2.4, lineGap = 7 } = {}) {
+    const clean = normalize(text) || ' ';
+    const lines = [];
+    let line = '';
+    for (const word of clean.split(' ')) {
+      const cand = line ? line + ' ' + word : word;
+      if (line && measure(cand, tracking) > maxWidth) {
+        lines.push(line);
+        line = word;
+      } else line = cand;
+    }
+    lines.push(line);
+
+    const widths = lines.map((l) => measure(l, tracking));
+    const width = Math.max(1, ...widths);
+    const strokes = [];
+    let ci = 0;
+    lines.forEach((l, li) => {
+      let x = (width - widths[li]) / 2;
+      const y0 = li * (10 + lineGap);
+      for (const ch of l) {
+        for (const s of glyph(ch).strokes) {
+          strokes.push({ pts: s.map((p) => ({ x: p.x + x, y: p.y + y0 })), ch: ci, glyph: ch });
+        }
+        x += glyph(ch).w + tracking;
+        ci++;
+      }
+      ci++; // the space that the line break replaced
+    });
+    return { text: clean, lines, strokes, width, height: lines.length * 10 + (lines.length - 1) * lineGap };
+  }
+
+  /* A picture instead of text: stroke strings in the same token syntax as the font, drawn in the
+     given order. The result is a layout, so it plans and plots exactly like a word. */
+  /* A drawing is drawn as listed: stroke by stroke, each in its own direction (fixed).
+     opts.size rescales so the longer side measures that many units, e.g. for pixel data. */
+  function drawingLayout(defs, name = 'drawing', opts = {}) {
+    const strokes = defs.map((d, i) => ({ pts: parseStroke(d), ch: i, glyph: '', fixed: true }));
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const s of strokes) for (const p of s.pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+    const k = opts.size ? opts.size / Math.max(x1 - x0, y1 - y0) : 1;
+    for (const s of strokes) s.pts = s.pts.map((p) => ({ x: (p.x - x0) * k, y: (p.y - y0) * k }));
+    return { text: name, lines: [name], strokes, width: (x1 - x0) * k, height: (y1 - y0) * k };
+  }
+
+  /* Keep letters in reading order; inside a letter, pick the nearest stroke end next,
+     reversing a stroke when its far end is closer (what a real plotter's planner does). */
+  function orderStrokes(strokes) {
+    const out = [];
+    let pen = { x: 0, y: 10 };
+    for (let i = 0; i < strokes.length; ) {
+      let j = i;
+      while (j < strokes.length && strokes[j].ch === strokes[i].ch) j++;
+      const group = strokes.slice(i, j);
+      while (group.length) {
+        let best = 0, bestD = Infinity, flip = false;
+        group.forEach((s, k) => {
+          const da = hyp(pen, s.pts[0]);
+          const db = hyp(pen, s.pts[s.pts.length - 1]);
+          if (da < bestD) { bestD = da; best = k; flip = false; }
+          if (!s.fixed && db < bestD - 1e-6) { bestD = db; best = k; flip = true; }
+        });
+        const s = group.splice(best, 1)[0];
+        const pts = flip ? s.pts.slice().reverse() : s.pts;
+        const cum = [0];
+        for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + hyp(pts[k - 1], pts[k]));
+        out.push({ ...s, pts, cum, len: cum[cum.length - 1] });
+        pen = pts[pts.length - 1];
+      }
+      i = j;
+    }
+    return out;
+  }
+
+  /* ── Motion plan ────────────────────────────────────────────────────────────────────
+   * Segments: wait / move (pen up, joint-space) / down / draw (pen down, Cartesian) / up.
+   * Durations are in font units, so the plan survives a resize unchanged. */
+  const HOME = { home: true };
+
+  function buildPlan(layout, opts = {}) {
+    const strokes = orderStrokes(layout.strokes);
+    const segs = [];
+    const add = (seg) => { segs.push(seg); return seg; };
+    add({ k: 'wait', dur: opts.startDelay ?? 0.5, at: HOME });
+    let from = HOME, si = 0;
+    for (const s of strokes) {
+      const a = s.pts[0];
+      const dist = from === HOME ? 40 : hyp(from, a);
+      add({ k: 'move', dur: 0.06 + 0.06 * Math.sqrt(dist), from, to: a, mid: true });
+      add({ k: 'down', dur: 0.07, at: a, stroke: s, si, mid: true });
+      add({ k: 'draw', dur: s.len / 30, stroke: s, si, mid: true });
+      add({ k: 'up', dur: 0.07, at: s.pts[s.pts.length - 1], stroke: s, si, mid: true });
+      from = s.pts[s.pts.length - 1];
+      si++;
+    }
+    add({ k: 'move', dur: 1.1, from, to: HOME, last: true });
+
+    // Rescale the writing part so a word takes a watchable amount of time.
+    const chars = layout.text.replace(/ /g, '').length || 1;
+    const rawMid = segs.reduce((s, g) => s + (g.mid ? g.dur : 0), 0) || 1;
+    const target = opts.duration ? opts.duration(chars) : clamp(3.5 + 0.55 * chars, 4, 13);
+    const f = clamp(target / rawMid, 0.3, 1.4);
+    let t = 0;
+    for (const g of segs) {
+      if (g.mid) g.dur *= f;
+      g.t0 = t;
+      t += g.dur;
+    }
+    const totalLen = strokes.reduce((s, k) => s + k.len, 0);
+    let acc = 0;
+    for (const g of segs) if (g.k === 'draw') { g.len0 = acc; acc += g.stroke.len; }
+    return { segs, strokes, total: t, totalLen, layout, speed: 30 / f };
+  }
+
+  function pointAt(stroke, d) {
+    const { pts, cum } = stroke;
+    if (d <= 0) return { x: pts[0].x, y: pts[0].y, i: 0 };
+    if (d >= stroke.len) { const p = pts[pts.length - 1]; return { x: p.x, y: p.y, i: pts.length - 1 }; }
+    let lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= d) lo = m; else hi = m; }
+    const u = (d - cum[lo]) / (cum[hi] - cum[lo] || 1);
+    return { x: pts[lo].x + (pts[hi].x - pts[lo].x) * u, y: pts[lo].y + (pts[hi].y - pts[lo].y) * u, i: lo };
+  }
+
+  /* Polyline along a stroke from distance d0 to d1, including the vertices in between. */
+  function slice(stroke, d0, d1) {
+    const a = pointAt(stroke, d0), b = pointAt(stroke, d1);
+    const out = [{ x: a.x, y: a.y }];
+    for (let i = a.i + 1; i <= b.i; i++) if (stroke.cum[i] > d0 && stroke.cum[i] < d1) out.push(stroke.pts[i]);
+    out.push({ x: b.x, y: b.y });
+    return out;
+  }
+
+  /* ── Kinematics ─────────────────────────────────────────────────────────────────────
+   * Screen coordinates (y down). a1 is the shoulder angle, a2 the elbow angle relative
+   * to link 1, phi the absolute tool direction (wrist → pen tip) when a tool is present. */
+  function ik2(L1, L2, dx, dy, elbow) {
+    const c = clamp((dx * dx + dy * dy - L1 * L1 - L2 * L2) / (2 * L1 * L2), -1, 1);
+    const a2 = elbow * Math.acos(c);
+    const a1 = Math.atan2(dy, dx) - Math.atan2(L2 * Math.sin(a2), L1 + L2 * Math.cos(a2));
+    return { a1, a2 };
+  }
+
+  function solve(geom, tip) {
+    let phi = 0, w = tip;
+    if (geom.tool) {
+      phi = geom.tool.angle(tip, geom);
+      w = { x: tip.x - geom.tool.len * Math.cos(phi), y: tip.y - geom.tool.len * Math.sin(phi) };
+    }
+    const j = ik2(geom.L1, geom.L2, w.x - geom.base.x, w.y - geom.base.y, geom.elbow);
+    j.phi = phi;
+    return j;
+  }
+
+  function fk(geom, j, out) {
+    const { base, L1, L2 } = geom;
+    out.elbow = { x: base.x + L1 * Math.cos(j.a1), y: base.y + L1 * Math.sin(j.a1) };
+    out.wrist = { x: out.elbow.x + L2 * Math.cos(j.a1 + j.a2), y: out.elbow.y + L2 * Math.sin(j.a1 + j.a2) };
+    out.tip = geom.tool
+      ? { x: out.wrist.x + geom.tool.len * Math.cos(j.phi), y: out.wrist.y + geom.tool.len * Math.sin(j.phi) }
+      : out.wrist;
+    return out;
+  }
+
+  const unwrapTo = (a, ref) => a + TAU * Math.round((ref - a) / TAU);
+  const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1));
+
+  /* A sensible default layout: text across the upper part of the stage, arm base below it,
+     link lengths sized so every letter is in reach with the elbow still bent. */
+  function standardGeometry(W, H, box, o = {}) {
+    const maxTW = Math.min(W * (o.textWidth ?? 0.84), o.maxTextPx ?? 980);
+    const maxTH = H * (o.textHeight ?? 0.3);
+    const scale = Math.min(maxTW / box.width, maxTH / box.height);
+    const tw = box.width * scale, th = box.height * scale;
+    const cx = W * (o.textX ?? 0.5), cy = H * (o.textY ?? 0.36);
+    const ox = cx - tw / 2, oy = cy - th / 2;
+    const base = { x: W * (o.baseX ?? 0.5), y: H - (o.baseInset ?? 40) };
+    const geom = { W, H, scale, ox, oy, tw, th, base, elbow: o.elbow ?? 1 };
+    geom.px = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+
+    let far = 0;
+    const corners = [[ox, oy], [ox + tw, oy], [ox, oy + th], [ox + tw, oy + th]];
+    for (const [x, y] of corners) far = Math.max(far, Math.hypot(x - base.x, y - base.y));
+    if (o.tool) {
+      geom.tool = { len: far * o.tool.len, angle: o.tool.angle };
+      far = 0;
+      for (const [x, y] of corners) {
+        const phi = o.tool.angle({ x, y }, geom);
+        far = Math.max(far, Math.hypot(x - geom.tool.len * Math.cos(phi) - base.x, y - geom.tool.len * Math.sin(phi) - base.y));
+      }
+    }
+    const reach = far * (o.reach ?? 1.1);
+    geom.reach = reach;
+    geom.L1 = reach * (o.split ?? 0.53);
+    geom.L2 = reach - geom.L1;
+    geom.home = { x: base.x + reach * (o.homeX ?? 0.3), y: base.y - reach * (o.homeY ?? 0.42) };
+    return geom;
+  }
+
+  /* ── Articulated arm (base yaw, shoulder, elbow, wrist) ──────────────────────────────
+   * Millimetres; x to the right, y forward from the base, z up. The wrist keeps the pen vertical
+   * and the pen lifts by moving the whole arm up in z. The links are equal and the pen hangs
+   * Lt = h0 below the wrist, so with the pen on the paper the wrist is level with the shoulder:
+   * the arm is an isosceles triangle and, seen from above, the elbow sits halfway to the pen. */
+  const ART = { h0: 96, L1: 150, L2: 150, Lt: 96, lift: 8, home: { x: 150, y: 20, z: 8 } };
+  const deg = (r) => (r * 180) / Math.PI;
+
+  function artSolve(x, y, z, d = ART) {
+    const yaw = Math.atan2(x, y);
+    const r = Math.hypot(x, y);
+    const h = z + d.Lt - d.h0;
+    const c = clamp((r * r + h * h - d.L1 * d.L1 - d.L2 * d.L2) / (2 * d.L1 * d.L2), -1, 1);
+    const q3 = -Math.acos(c); // elbow up
+    const q2 = Math.atan2(h, r) - Math.atan2(d.L2 * Math.sin(q3), d.L1 + d.L2 * Math.cos(q3));
+    return { yaw, q2, q3, q4: -Math.PI / 2 - q2 - q3 };
+  }
+
+  function artFK(j, d = ART) {
+    const ux = Math.sin(j.yaw), uy = Math.cos(j.yaw);
+    const P = (r, z) => ({ x: ux * r, y: uy * r, z, r });
+    const re = d.L1 * Math.cos(j.q2), ze = d.h0 + d.L1 * Math.sin(j.q2);
+    const rw = re + d.L2 * Math.cos(j.q2 + j.q3), zw = ze + d.L2 * Math.sin(j.q2 + j.q3);
+    const a = j.q2 + j.q3 + j.q4;
+    return { base: P(0, 0), shoulder: P(0, d.h0), elbow: P(re, ze), wrist: P(rw, zw), tip: P(rw + d.Lt * Math.cos(a), zw + d.Lt * Math.sin(a)) };
+  }
+
+  /* Layout in real millimetres, seen from directly above (k = 0). The elbow is a single hinge, so the
+     base, both links and the pen always lie in one vertical plane: from above they form one straight
+     line that turns with the base and shortens as the elbow folds. (k > 0 would draw heights up the
+     screen, a plan-oblique view.) The text has a fixed physical size and distance from the base; the
+     whole scene is scaled to fit the stage with the base at the bottom. */
+  function articulatedGeometry(W, H, box, o = {}) {
+    const d = { ...ART, ...(o.dims || {}) };
+    const k = o.k ?? 0;
+    const s = Math.min((o.textMaxW ?? 260) / box.width, (o.textMaxCap ?? 28) / 10, (o.textMaxH ?? 66) / box.height);
+    const Yc = o.textY ?? 140;
+    const halfW = (box.width * s) / 2, halfH = (box.height * s) / 2;
+    // the highest the arm will appear, over the poses it takes
+    let top = Yc + halfH;
+    const probe = (x, y, z) => {
+      const F = artFK(artSolve(x, y, z, d), d);
+      for (const q of [F.elbow, F.wrist]) top = Math.max(top, q.y + k * q.z);
+    };
+    for (const [x, y] of [[-halfW, Yc - halfH], [halfW, Yc - halfH], [-halfW, Yc + halfH], [halfW, Yc + halfH], [0, Yc + halfH], [0, Yc - halfH]]) probe(x, y, d.lift + 16);
+    probe(d.home.x, d.home.y, d.home.z);
+    top += o.armPad ?? 20;
+    const bottom = -(o.baseR ?? 64);
+    const padT = o.padTop ?? 20, padB = o.padBottom ?? 14, padX = o.padX ?? 18;
+    const side = Math.max(halfW + (o.sidePad ?? 16), Math.abs(d.home.x) + 26, 80);
+    let P = Math.min((W - 2 * padX) / (2 * side), (H - padT - padB) / (top - bottom));
+    if (o.maxTextPx) P = Math.min(P, o.maxTextPx / (2 * halfW));
+    // flip: base at the top of the stage, reaching down; the text still reads upright
+    const flip = !!o.flip, f = flip ? -1 : 1;
+    const extra = Math.max(0, H - padT - padB - (top - bottom) * P) * (o.vAlign ?? 0.5);
+    const base = flip
+      ? { x: W * (o.baseX ?? 0.5), y: padT - bottom * P + extra }
+      : { x: W * (o.baseX ?? 0.5), y: H - padB + bottom * P - extra };
+    const rMax = Math.sqrt((d.L1 + d.L2) ** 2 - (d.Lt - d.h0) ** 2);
+    const scale = s * P;
+    const ox = base.x - halfW * P, oy = flip ? base.y + (Yc - halfH) * P : base.y - (Yc + halfH) * P;
+    const geom = { kin: 'art', W, H, scale, ox, oy, tw: 2 * halfW * P, th: 2 * halfH * P, base, d, k, P, mm: 1 / P, rMax, mmPerUnit: s, textY: Yc, topMM: top, halfW, halfH };
+    geom.px = (p) => ({ x: ox + p.x * scale, y: oy + p.y * scale });
+    geom.toMM = (q) => ({ x: (f * (q.x - base.x)) / P, y: (f * (base.y - q.y)) / P });
+    geom.project = (p) => ({ x: base.x + f * p.x * P, y: base.y - f * (p.y + k * p.z) * P });
+    geom.flip = flip;
+    geom.reach = rMax * P;
+    geom.L1 = d.L1 * P;
+    geom.L2 = d.L2 * P;
+    return geom;
+  }
+
+  /* ── Controller ─────────────────────────────────────────────────────────────────────── */
+  function create(stage, cfg) {
+    const reduce = root.matchMedia && root.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mk = (cls) => {
+      const c = document.createElement('canvas');
+      c.className = cls;
+      c.setAttribute('aria-hidden', 'true');
+      stage.appendChild(c);
+      return c;
+    };
+    const bgC = cfg.bg ? mk('pl-bg') : null;
+    const inkC = mk('pl-ink');
+    const armC = mk('pl-arm');
+    const bgX = bgC && bgC.getContext('2d');
+    const inkX = inkC.getContext('2d');
+    const armX = armC.getContext('2d');
+
+    let W = 0, H = 0, dpr = 1, geom = null, layout = null, plan = null;
+    let t = 0, segIdx = 0, inkAt = { seg: -1, d: 0 }, running = false, visible = true, last = 0, speedMul = 1;
+    const st = { j: { a1: 0, a2: 0, phi: 0 }, z: 1, k: 'wait', drawing: false, ch: -1, si: -1, progress: 0, done: false, t: 0 };
+
+    function setText(text) {
+      const maxWidth = cfg.wrap ? cfg.wrap(W || stage.clientWidth) : Infinity;
+      layout = cfg.layout || layoutText(text, { maxWidth, tracking: cfg.tracking ?? 2.4 });
+      plan = buildPlan(layout, cfg);
+      api.plan = plan;
+      api.layout = layout;
+      cfg.onPlan && cfg.onPlan(plan, api);
+      resize(true);
+      restart();
+    }
+
+    function restart() {
+      t = reduce ? plan.total + 0.01 : 0;
+      segIdx = 0;
+      inkAt = { seg: -1, d: 0 };
+      inkX.clearRect(0, 0, W, H);
+      st.done = false;
+      tick(0);
+      if (cfg.autoplay !== false) kick();
+    }
+
+    function resize(force) {
+      const w = stage.clientWidth, h = stage.clientHeight;
+      const r = Math.min(root.devicePixelRatio || 1, 2);
+      if (!force && w === W && h === H && r === dpr) return;
+      const rewrap = cfg.wrap && w !== W && W !== 0 && cfg.wrap(w) !== cfg.wrap(W);
+      W = w; H = h; dpr = r;
+      if (rewrap) { setText(layout.text); return; }
+      for (const c of [bgC, inkC, armC]) {
+        if (!c) continue;
+        c.width = Math.round(W * dpr);
+        c.height = Math.round(H * dpr);
+      }
+      for (const x of [bgX, inkX, armX]) if (x) x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (!plan) return;
+      geom = cfg.geometry(W, H, layout);
+      api.geom = geom;
+      if (bgX) { bgX.clearRect(0, 0, W, H); cfg.bg(bgX, geom, api); }
+      // replay the ink drawn so far at the new size
+      inkX.clearRect(0, 0, W, H);
+      inkAt = { seg: -1, d: 0 };
+      tick(0);
+    }
+
+    function locate() {
+      const segs = plan.segs;
+      if (segIdx >= segs.length) segIdx = segs.length - 1;
+      while (segIdx > 0 && t < segs[segIdx].t0) segIdx--;
+      while (segIdx < segs.length - 1 && t >= segs[segIdx].t0 + segs[segIdx].dur) segIdx++;
+      return segs[segIdx];
+    }
+
+    const jointsFor = (where) => solve(geom, where.home ? geom.home : geom.px(where));
+
+    function evalPlanar(seg, u) {
+        let j, tipPx = null;
+        if (seg.k === 'wait') {
+          j = jointsFor(seg.at); st.z = 1;
+        } else if (seg.k === 'move') {
+          const a = jointsFor(seg.from), b = jointsFor(seg.to);
+          const e = ease(u);
+          const a1 = unwrapTo(b.a1, a.a1), phi = unwrapTo(b.phi, a.phi);
+          j = { a1: a.a1 + (a1 - a.a1) * e, a2: a.a2 + (b.a2 - a.a2) * e, phi: a.phi + (phi - a.phi) * e };
+          st.z = 1;
+          if (seg.last && t >= seg.t0 + seg.dur) st.done = true;
+        } else if (seg.k === 'down' || seg.k === 'up') {
+          tipPx = geom.px(seg.at);
+          st.z = seg.k === 'down' ? 1 - ease(u) : ease(u);
+        } else {
+          const p = pointAt(seg.stroke, clamp(u, 0, 1) * seg.stroke.len);
+          tipPx = geom.px(p);
+          st.z = 0;
+          st.drawing = true;
+        }
+        if (tipPx) j = solve(geom, tipPx);
+        if (t >= plan.total) {
+          st.done = true;
+          if (!reduce) {
+            // idle: the servos hold position with a barely visible hunt
+            const s = t - plan.total;
+            j.a1 += 0.006 * Math.sin(s * 0.9);
+            j.a2 += 0.009 * Math.sin(s * 0.7 + 1.3);
+          }
+        }
+        st.j = j;
+        fk(geom, j, st);
+        if (tipPx) st.tip = tipPx;
+        st.base = geom.base;
+    }
+
+    /* Articulated arm: plan the pen tip in millimetres (x right, y forward, z up), solve the four
+       joints, then project every joint into the flat plan-oblique view. */
+    function evalArticulated(seg, u) {
+      const d = geom.d;
+      const at = (where, z) => (where.home ? { ...d.home } : { ...geom.toMM(geom.px(where)), z });
+      let tip;
+      if (seg.k === 'wait') tip = at(seg.at);
+      else if (seg.k === 'move') {
+        const a = at(seg.from, d.lift), b = at(seg.to, d.lift), e = ease(u);
+        const hop = Math.sin(Math.PI * u) * Math.min(5, Math.hypot(b.x - a.x, b.y - a.y) * 0.05);
+        tip = { x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, z: a.z + (b.z - a.z) * e + hop };
+      } else if (seg.k === 'down') tip = at(seg.at, d.lift * (1 - ease(u)));
+      else if (seg.k === 'up') tip = at(seg.at, d.lift * ease(u));
+      else {
+        tip = at(pointAt(seg.stroke, u * seg.stroke.len), 0);
+        st.drawing = true;
+      }
+      const j = artSolve(tip.x, tip.y, tip.z, d);
+      if (t >= plan.total) {
+        st.done = true;
+        if (!reduce) {
+          const s = t - plan.total;
+          j.q2 += 0.004 * Math.sin(s * 0.9);
+          j.q3 += 0.006 * Math.sin(s * 0.7 + 1.3);
+          j.q4 = -Math.PI / 2 - j.q2 - j.q3;
+        }
+      }
+      const F = artFK(j, d);
+      st.j = j;
+      st.joints = { j1: deg(j.yaw), j2: deg(j.q2), j3: deg(j.q3), j4: deg(j.q4) };
+      st.p3 = F;
+      st.tip3 = F.tip;
+      st.z = clamp(F.tip.z / d.lift, 0, 1);
+      st.base = geom.base;
+      st.shoulder = geom.project(F.shoulder);
+      st.elbow = geom.project(F.elbow);
+      st.wrist = geom.project(F.wrist);
+      st.tip = geom.project(F.tip);
+      if (st.drawing) st.tip = geom.px(pointAt(seg.stroke, u * seg.stroke.len));
+    }
+
+    function evaluate() {
+      const seg = locate();
+      const u = seg.dur ? (t - seg.t0) / seg.dur : 1;
+      st.k = seg.k;
+      st.drawing = false;
+      st.si = seg.si ?? -1;
+      st.ch = seg.stroke ? seg.stroke.ch : -1;
+      if (geom.kin === 'art') evalArticulated(seg, clamp(u, 0, 1));
+      else evalPlanar(seg, u);
+      st.t = t;
+      st.seg = seg;
+      let drawn = 0;
+      if (seg.k === 'draw') drawn = seg.len0 + clamp(u, 0, 1) * seg.stroke.len;
+      else for (let i = segIdx; i >= 0; i--) {
+        const g = plan.segs[i];
+        if (g.k === 'draw') { drawn = g.len0 + g.stroke.len; break; }
+      }
+      st.drawn = drawn;
+      st.progress = st.done ? 1 : drawn / (plan.totalLen || 1);
+    }
+
+    /* Draw newly laid ink: everything between the last ink cursor and the current time. */
+    function laySegmentInk() {
+      const segs = plan.segs;
+      let i = Math.max(0, inkAt.seg);
+      for (; i < segs.length && segs[i].t0 <= t; i++) {
+        const g = segs[i];
+        if (g.k !== 'draw') continue;
+        const dEnd = clamp((t - g.t0) / g.dur, 0, 1) * g.stroke.len;
+        const d0 = i === inkAt.seg ? inkAt.d : 0;
+        if (dEnd > d0 + 1e-6) {
+          const pts = slice(g.stroke, d0, dEnd).map(geom.px);
+          cfg.ink(inkX, pts, { start: d0 === 0, end: dEnd >= g.stroke.len - 1e-6, stroke: g.stroke, geom, api });
+        }
+        inkAt = { seg: i, d: dEnd };
+      }
+    }
+
+    function tick(dt) {
+      t += dt;
+      evaluate();
+      laySegmentInk();
+      armX.clearRect(0, 0, W, H);
+      cfg.arm(armX, st, geom, api);
+      cfg.frame && cfg.frame(st, api);
+    }
+
+    function loop(now) {
+      if (!running) return;
+      const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 0;
+      last = now;
+      tick(dt * speedMul);
+      if (reduce && st.done) { running = false; return; }
+      requestAnimationFrame(loop);
+    }
+
+    function kick() {
+      if (running || !visible) return;
+      running = true;
+      last = 0;
+      requestAnimationFrame(loop);
+    }
+
+    const api = {
+      setText, restart, kick,
+      seek(T) { t = T; segIdx = 0; inkAt = { seg: -1, d: 0 }; inkX.clearRect(0, 0, W, H); tick(0); },
+      refresh() { resize(true); },
+      scrub(f) { api.seek(clamp(f, 0, 1) * plan.total); },
+      play() { cfg.autoplay = true; restart(); },
+      get t() { return t; },
+      set speed(v) { speedMul = v; },
+      get speed() { return speedMul; },
+      state: st,
+      trail(units) {
+        const g = st.seg;
+        if (!g || g.k !== 'draw') return null;
+        const d = clamp((t - g.t0) / g.dur, 0, 1) * g.stroke.len;
+        return slice(g.stroke, Math.max(0, d - units), d).map(geom.px);
+      },
+      reducedMotion: reduce
+    };
+
+    new ResizeObserver(() => resize(false)).observe(stage);
+    if ('IntersectionObserver' in root) {
+      new IntersectionObserver((es) => {
+        visible = es[es.length - 1].isIntersecting;
+        if (visible && cfg.autoplay !== false) kick(); else running = false;
+      }).observe(stage);
+    }
+    W = stage.clientWidth; H = stage.clientHeight;
+    setText(cfg.text);
+    return api;
+  }
+
+  /* ── Drawing helpers shared by the renderers ───────────────────────────────────────── */
+
+  /* Outline of two circles joined by their outer tangents (a tapered link). */
+  function capsule(ctx, P, r1, Q, r2) {
+    const dx = Q.x - P.x, dy = Q.y - P.y, d = Math.hypot(dx, dy) || 1e-6;
+    const th = Math.atan2(dy, dx);
+    const b = Math.acos(clamp((r1 - r2) / d, -1, 1));
+    ctx.moveTo(P.x + r1 * Math.cos(th + b), P.y + r1 * Math.sin(th + b));
+    ctx.lineTo(Q.x + r2 * Math.cos(th + b), Q.y + r2 * Math.sin(th + b));
+    ctx.arc(Q.x, Q.y, r2, th + b, th - b, true);
+    ctx.lineTo(P.x + r1 * Math.cos(th - b), P.y + r1 * Math.sin(th - b));
+    ctx.arc(P.x, P.y, r1, th - b, th + b - TAU, true);
+    ctx.closePath();
+  }
+
+  /* Render text with the stroke font as plain polylines (for labels drawn on canvas). */
+  function strokeText(ctx, text, x, y, size, opts = {}) {
+    const lay = layoutText(text, { tracking: opts.tracking ?? 3 });
+    const s = size / 10;
+    const ax = opts.align === 'center' ? lay.width / 2 : opts.align === 'right' ? lay.width : 0;
+    ctx.beginPath();
+    for (const st of lay.strokes) {
+      st.pts.forEach((p, i) => {
+        const X = x + (p.x - ax) * s, Y = y + (p.y - 10) * s;
+        i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
+      });
+    }
+    ctx.stroke();
+  }
+
+  root.Plotter = { create, layoutText, drawingLayout, buildPlan, standardGeometry, articulatedGeometry, artSolve, artFK, ART, ik2, capsule, strokeText, normalize, pointAt, FONT };
+})(window);
+</script>
+<script>
+  /* Change the title here. */
+  const TITLE = 'Placeholder';
+
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const AMBER = '#ffb340', DIM = 'rgba(255,179,64,0.38)', FAINT = 'rgba(255,179,64,0.13)', HOT = '#fff0d2';
+    $('siteTitle').textContent = TITLE;
+    $('readmeTitle').textContent = TITLE;
+    $('sessName').textContent = TITLE.toLowerCase();
+    $('plotText').value = TITLE.toUpperCase();
+    $('heroCmd').textContent = `./plot --font single-stroke --pen 0.5 "${TITLE.toUpperCase()}"`;
+    const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const line = (ctx, a, b) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+
+    function drawBg(ctx, g) {
+      const { W, H, base, P } = g;
+      // graticule on the table: 50 mm divisions from the base
+      const div = 50 * P;
+      ctx.strokeStyle = FAINT;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([1, 5]);
+      for (let x = base.x % div; x < W; x += div) line(ctx, { x, y: 0 }, { x, y: H });
+      for (let y = base.y % div; y < H; y += div) line(ctx, { x: 0, y }, { x: W, y });
+      ctx.setLineDash([]);
+      ctx.strokeStyle = DIM;
+      for (let x = base.x % (div / 5); x < W; x += div / 5) line(ctx, { x, y: H - 2 }, { x, y: H - (Math.abs(Math.round((x - base.x) / (div / 5))) % 5 ? 6 : 12) });
+      // reach envelope and the base footprint
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, g.reach, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = ctx.lineJoin = 'round';
+      Plotter.strokeText(ctx, `R${g.rMax.toFixed(0)} ENVELOPE`, base.x + g.reach * 0.72 + 6, base.y - g.reach * 0.69, 7);
+      ctx.strokeStyle = AMBER;
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(base.x, base.y, 52 * P, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = DIM;
+      ctx.beginPath(); ctx.arc(base.x, base.y, 44 * P, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([14, 6]);
+      line(ctx, { x: base.x, y: base.y + 60 * P }, { x: base.x, y: 8 });
+      ctx.setLineDash([]);
+    }
+
+    function drawInk(ctx, pts, info) {
+      ctx.strokeStyle = AMBER;
+      ctx.lineWidth = Math.max(1.5, info.geom.scale * 0.24);
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.stroke();
+    }
+
+    function drawArm(ctx, st, g, api) {
+      const { base, shoulder, elbow, wrist, tip } = st, P = g.P, F = st.p3;
+      const rT = 22 * P, r1 = 10 * P, r2 = 8 * P, r3 = 6 * P;
+      ctx.lineCap = ctx.lineJoin = 'round';
+      // wireframe, with the ink knocked out under the parts so it reads as solid
+      ctx.fillStyle = '#0a0704';
+      ctx.strokeStyle = AMBER;
+      ctx.lineWidth = 1.4;
+      for (const [A, ra, B, rb] of [[base, rT, shoulder, rT * 0.85], [wrist, r3 * 0.6, tip, 1.5], [elbow, r2, wrist, r3], [shoulder, r1, elbow, r2]]) {
+        ctx.beginPath(); Plotter.capsule(ctx, A, ra, B, rb); ctx.fill(); ctx.stroke();
+      }
+      ctx.strokeStyle = DIM;
+      ctx.lineWidth = 1;
+      line(ctx, shoulder, elbow);
+      line(ctx, elbow, wrist);
+      ctx.strokeStyle = AMBER;
+      ctx.lineWidth = 1.4;
+      for (const [c, r] of [[shoulder, r1 * 0.9], [elbow, r2 * 0.9], [wrist, r3 * 0.85]]) {
+        ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.35, 0, Math.PI * 2); ctx.stroke();
+      }
+      // joint labels in the vector font
+      ctx.lineWidth = 1.2;
+      const lab = Math.max(7, Math.min(10, g.W / 90)), J = st.joints;
+      const side = st.j.yaw >= 0 ? -1 : 1, al = side < 0 ? 'right' : 'left';
+      Plotter.strokeText(ctx, `J1 ${J.j1.toFixed(1)}`, base.x + 58 * P * side, base.y + 4, lab, { align: al });
+      if (g.W >= 600) {
+        Plotter.strokeText(ctx, `J2 ${J.j2.toFixed(1)}`, shoulder.x + (rT + 8) * side, shoulder.y + 4, lab, { align: al });
+        Plotter.strokeText(ctx, `J3 ${J.j3.toFixed(1)}`, elbow.x + (r2 + 10) * side, elbow.y - 6, lab, { align: al });
+        Plotter.strokeText(ctx, `J4 ${J.j4.toFixed(1)}`, wrist.x + (r3 + 10) * side, wrist.y + 4, lab, { align: al });
+      }
+      // tip crosshair and coordinates
+      ctx.strokeStyle = DIM;
+      line(ctx, { x: tip.x - 14, y: tip.y }, { x: tip.x - 5, y: tip.y });
+      line(ctx, { x: tip.x + 5, y: tip.y }, { x: tip.x + 14, y: tip.y });
+      line(ctx, { x: tip.x, y: tip.y + 5 }, { x: tip.x, y: tip.y + 14 });
+      ctx.strokeStyle = AMBER;
+      const right = tip.x + 120 < g.W && tip.x >= base.x - 20;
+      Plotter.strokeText(ctx, `X${F.tip.x.toFixed(0)} Y${F.tip.y.toFixed(0)} Z${F.tip.z.toFixed(0)}`, tip.x + (right ? 16 : -16), tip.y + 22, lab, { align: right ? 'left' : 'right' });
+      // beam spot
+      if (st.z < 0.5) {
+        const trail = api.trail(2.5);
+        if (trail) {
+          ctx.strokeStyle = HOT;
+          ctx.lineWidth = Math.max(2, g.scale * 0.3);
+          ctx.beginPath();
+          trail.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+          ctx.stroke();
+        }
+        ctx.fillStyle = HOT;
+        ctx.beginPath(); ctx.arc(tip.x, tip.y, 3.2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    /* G-code generated from the motion plan, each line stamped with the time the arm reaches it.
+       Coordinates are millimetres in the arm's frame, the same frame as the readouts. */
+    let gc = [], shown = -2;
+    function buildGcode(plan) {
+      const lay = plan.layout;
+      const s = Math.min(260 / lay.width, 2.8, 66 / lay.height);
+      const X = (q) => ((q.x - lay.width / 2) * s).toFixed(2), Y = (q) => (140 - (q.y - lay.height / 2) * s).toFixed(2);
+      gc = [];
+      const add = (t, code, note = '') => gc.push({ t, code, note });
+      add(0, `; ${lay.text}`);
+      add(0, 'G21', 'units: mm');
+      add(0, 'G90', 'absolute');
+      for (const sg of plan.segs) {
+        if (sg.k === 'move') add(sg.t0, sg.to.home ? 'G28' : `G0 X${X(sg.to)} Y${Y(sg.to)} Z12`, sg.to.home ? 'park' : 'travel, pen up');
+        else if (sg.k === 'down') add(sg.t0, 'G1 Z0 F600', `pen down · ${sg.stroke.glyph}`);
+        else if (sg.k === 'up') add(sg.t0, 'G0 Z12', 'pen up');
+        else if (sg.k === 'draw') {
+          const k = sg.stroke;
+          for (let i = 1; i < k.pts.length; i++) add(sg.t0 + (sg.dur * k.cum[i]) / k.len, `G1 X${X(k.pts[i])} Y${Y(k.pts[i])}`);
+        }
+      }
+      add(plan.total, 'M2', 'end of program');
+      shown = -2;
+    }
+    const el = { list: $('gcList'), count: $('gcCount'), state: $('gcState'), pct: $('gcPct'), bar: $('gcBar'),
+      t1: $('wT1'), t2: $('wT2'), t3: $('wT3'), t4: $('wT4'), xyz: $('wXYZ'), pen: $('wPen') };
+    function frame(st, api) {
+      let lo = 0, hi = gc.length - 1;
+      while (lo < hi) { const m = (lo + hi + 1) >> 1; if (gc[m].t <= st.t + 1e-6) lo = m; else hi = m - 1; }
+      if (lo !== shown) {
+        shown = lo;
+        const from = Math.max(0, lo - 34);
+        let html = '';
+        for (let i = from; i <= lo; i++) {
+          const g = gc[i];
+          html += `<li${i === lo ? ' class="cur"' : ''}><span class="n">N${String(i * 10).padStart(4, '0')}</span>${esc(g.code)}${g.note ? ` <span class="c">; ${esc(g.note)}</span>` : ''}</li>`;
+        }
+        el.list.innerHTML = html;
+        el.count.textContent = `${lo + 1}/${gc.length}`;
+      }
+      const pct = Math.round(st.progress * 100);
+      el.pct.textContent = `${pct}%`;
+      el.bar.style.width = `${pct}%`;
+      el.state.textContent = st.done ? 'done · parked' : st.si < 0 ? 'pen up · travelling'
+        : `${st.z < 0.5 ? 'pen down' : 'pen up'} · stroke ${st.si + 1}/${api.plan.strokes.length}`;
+      const J = st.joints, t3 = st.tip3;
+      el.t1.textContent = J.j1.toFixed(2);
+      el.t2.textContent = J.j2.toFixed(2);
+      el.t3.textContent = J.j3.toFixed(2);
+      el.t4.textContent = J.j4.toFixed(2);
+      el.xyz.textContent = `${t3.x.toFixed(1)}, ${t3.y.toFixed(1)}, ${t3.z.toFixed(1)}`;
+      el.pen.textContent = st.z < 0.5 ? 'DOWN' : 'UP';
+    }
+
+    const p = Plotter.create($('stage'), {
+      text: TITLE,
+      wrap: (W) => (W < 600 ? 46 : W < 800 ? 70 : Infinity),
+      geometry: (W, H, box) => Plotter.articulatedGeometry(W, H, box, { k: 0, textY: 140, padTop: 26, padBottom: 14 }),
+      bg: drawBg,
+      ink: drawInk,
+      arm: drawArm,
+      frame,
+      onPlan: (plan) => {
+        buildGcode(plan);
+        $('heroCmd').textContent = `./plot --font single-stroke --pen 0.5 "${plan.layout.text}"`;
+      }
+    });
+    window.plotter = p;
+
+    $('plotForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $('plotText').value.trim();
+      if (v) p.setText(v);
+    });
+    $('replay').addEventListener('click', () => p.restart());
+    document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => {
+      p.speed = Number(b.dataset.speed);
+      document.querySelectorAll('[data-speed]').forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+    }));
+  })();
+</script>
+
+</body>
+</html>
