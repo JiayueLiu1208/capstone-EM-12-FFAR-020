@@ -1,0 +1,644 @@
+<title>Arm Plotter Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Spline+Sans+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a maker's bench seen from above. The hero is a green cutting mat with a taped sheet the arm
+     writes on in broad-nib ink; below it the site reads as a dot-grid build notebook with a ruled margin. */
+  :root {
+    --page: #f7f8f5;         /* dot-grid notebook page */
+    --dot: #c9cfd6;          /* grid dots and rules */
+    --ink: #1c2236;          /* text, blue-black */
+    --muted: #5b6275;        /* secondary text */
+    --pen: #1f2b78;          /* fountain-pen ink, the accent */
+    --mat: #2b6a55;          /* cutting mat */
+    --margin: #d8695f;       /* notebook margin rule */
+    --f-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', sans-serif;
+    --f-body: 'Newsreader', Georgia, 'Times New Roman', serif;
+    --f-mono: 'Spline Sans Mono', ui-monospace, Menlo, monospace;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--page); }
+  body {
+    margin: 0;
+    background-color: var(--page);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1.3px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font: 400 19px/1.6 var(--f-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--pen); text-underline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--pen); outline-offset: 3px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .gutter {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .inner { max-width: 1160px; margin: 0 auto; }
+  .mono { font: 500 12px/1.5 var(--f-mono); letter-spacing: 0.04em; }
+
+  /* hero: the mat */
+  .mat { background: var(--mat); }
+  .mat .bar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-block: 14px; color: #dff0e8; }
+  .mat .bar nav { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+  .mat .bar a { color: #dff0e8; text-decoration: none; }
+  .mat .bar a:hover { text-decoration: underline; }
+  .mat .logo { font: 700 17px/1 var(--f-display); letter-spacing: -0.01em; }
+  .stage { position: relative; height: clamp(460px, 54vw, 680px); overflow: hidden; background: var(--mat); }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .write {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 22px 40px;
+    align-items: end;
+    padding-block: 36px 10px;
+  }
+  .write h2 {
+    margin: 0;
+    font: 650 clamp(30px, 4.4vw, 54px)/1.02 var(--f-display);
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    max-width: 18ch;
+  }
+  .write h2 em { font: italic 400 1.04em/1 var(--f-body); color: var(--pen); letter-spacing: -0.01em; }
+  .write form { display: flex; align-items: end; gap: 14px; }
+  .write .field { display: grid; gap: 4px; }
+  .write label { color: var(--muted); }
+  .write input {
+    width: min(300px, 60vw);
+    padding: 6px 2px 8px;
+    border: 0;
+    border-bottom: 2px solid var(--ink);
+    background: transparent;
+    color: var(--pen);
+    font: italic 400 26px/1.1 var(--f-body);
+  }
+  .write input:focus { outline: none; border-bottom-color: var(--pen); }
+  .btn {
+    padding: 10px 18px;
+    border: 1.5px solid var(--ink);
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--page);
+    font: 600 15px var(--f-display);
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--pen); border-color: var(--pen); }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .btn.ghost:hover { color: var(--page); }
+  .caption-line { color: var(--muted); margin: 0; padding-bottom: 6px; }
+
+  /* notebook entries: ruled margin on the left */
+  .entry {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    margin-top: 78px;
+  }
+  .entry > .margin {
+    padding: 6px 20px 0 0;
+    border-right: 1.5px solid var(--margin);
+    color: var(--muted);
+    text-align: right;
+  }
+  .entry > .page { padding-left: 32px; min-width: 0; }
+  .entry h3 {
+    margin: 0 0 14px;
+    font: 650 clamp(26px, 3vw, 36px)/1.1 var(--f-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  .entry p { margin: 0 0 14px; max-width: 64ch; }
+
+  /* test sheets */
+  .sheets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 22px; }
+  .sheets figure { margin: 0; min-width: 0; }
+  .sheet {
+    position: relative;
+    aspect-ratio: 1.414;
+    max-width: 100%;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(28, 34, 54, 0.12), 0 8px 22px rgba(28, 34, 54, 0.1);
+  }
+  .sheet canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .sheets figcaption { margin-top: 12px; font-size: 16px; line-height: 1.45; color: var(--muted); }
+  .sheets figcaption b { display: block; font: 500 12px var(--f-mono); color: var(--ink); letter-spacing: 0.04em; }
+
+  /* steps */
+  .steps { margin: 6px 0 0; padding: 0; list-style: none; counter-reset: s; }
+  .steps li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-bottom: 1px dashed var(--dot); counter-increment: s; }
+  .steps li::before { content: counter(s); font: 650 28px/1 var(--f-display); color: var(--pen); }
+  .steps b { font-family: var(--f-display); font-weight: 650; }
+
+  .eq {
+    margin: 10px 0;
+    padding: 12px 16px;
+    background: #ffffff;
+    border-left: 3px solid var(--pen);
+    font: 400 15px/1.6 var(--f-mono);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* parts checklist */
+  .parts { columns: 2; column-gap: 40px; margin: 6px 0 0; padding: 0; list-style: none; }
+  .parts li { break-inside: avoid; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; padding: 7px 0; }
+  .parts li::before { content: '✓'; font: 700 18px/1.3 var(--f-display); color: var(--pen); }
+  .parts small { display: block; font: 400 12px/1.4 var(--f-mono); color: var(--muted); }
+
+  .log { margin: 6px 0 0; padding: 0; list-style: none; }
+  .log li { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; padding: 10px 0; border-bottom: 1px dashed var(--dot); }
+  .log time { font: 500 13px/1.9 var(--f-mono); color: var(--pen); font-variant-numeric: tabular-nums; }
+
+  .team { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 10px; }
+  .team div { min-width: 0; }
+  .sig { position: relative; height: 70px; border-bottom: 1.5px solid var(--ink); }
+  .sig canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .team p { margin: 8px 0 0; font-size: 16px; line-height: 1.4; }
+  .team p span { display: block; color: var(--muted); }
+
+  footer { margin-top: 90px; padding-block: 26px 40px; border-top: 1.5px solid var(--ink); }
+  footer .inner { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 30px; }
+  footer nav { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+
+  @media (max-width: 860px) {
+    .entry { grid-template-columns: minmax(0, 1fr); margin-top: 56px; }
+    .entry > .margin { text-align: left; border-right: 0; border-bottom: 1.5px solid var(--margin); padding: 0 0 6px; margin-bottom: 18px; }
+    .entry > .page { padding-left: 0; }
+    .sheets, .team { grid-template-columns: minmax(0, 1fr); }
+    .write { grid-template-columns: minmax(0, 1fr); }
+    .parts { columns: 1; }
+    .mat .bar nav { display: none; }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 18px; }
+    .write form { flex-wrap: wrap; }
+    .write .field { flex: 1 1 100%; }
+    .write input { width: 100%; }
+    .log li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  }
+</style>
+
+<header class="mat">
+  <div class="gutter">
+    <div class="inner bar mono">
+      <span class="logo" id="logo">Placeholder</span>
+      <nav aria-label="Sections">
+        <a href="#tests">Test sheets</a>
+        <a href="#how">How it writes</a>
+        <a href="#parts">Parts</a>
+        <a href="#log">Log</a>
+        <a href="#team">Team</a>
+      </nav>
+    </div>
+  </div>
+  <h1 class="sr-only" id="siteTitle">Placeholder</h1>
+  <div class="stage" id="stage"></div>
+</header>
+
+<main class="gutter">
+  <div class="inner">
+    <section class="write">
+      <div>
+        <p class="caption-line mono">Fig. 1 · The arm on the bench, writing the project name with a 2.4 mm italic nib</p>
+        <h2>A robot arm that writes <em>by hand</em>, one stroke at a time.</h2>
+      </div>
+      <form id="plotForm">
+        <div class="field">
+          <label class="mono" for="plotText">Give it something to write</label>
+          <input id="plotText" maxlength="24" autocomplete="off" spellcheck="false">
+        </div>
+        <button class="btn" type="submit">Write</button>
+        <button class="btn ghost" type="button" id="replay">Again</button>
+      </form>
+    </section>
+
+    <section class="entry" id="about">
+      <div class="margin mono">What it is</div>
+      <div class="page">
+        <h3>Four joints, four servos, and a pen that always points down.</h3>
+        <p>This is a desktop articulated arm. The base turns on a thrust bearing, the shoulder and elbow lift and reach the two links, and a small wrist servo tilts the pen back so it stays vertical however far the arm stretches. To lift the pen between strokes, the whole arm rises 12 mm.</p>
+        <p>You type a word, the software breaks each letter into single strokes, plans the order to keep the pen off the paper as little as possible, and solves the four joint angles for every half-millimetre of the path. The animation above uses the same planner and the same equations, seen from directly above. Because the elbow is a single hinge, both links always line up with the pen.</p>
+      </div>
+    </section>
+
+    <section class="entry" id="tests">
+      <div class="margin mono">Test sheets<br>07 · 11 · 15</div>
+      <div class="page">
+        <h3>What came off the bench</h3>
+        <p>Three of the sheets that shaped the build. Each one answered a question about the arm.</p>
+        <div class="sheets">
+          <figure>
+            <div class="sheet"><canvas id="sheetA" aria-hidden="true"></canvas></div>
+            <figcaption><b>Test 07 · Alphabet</b>Every glyph at 6 mm cap height, to check the font and the stroke order.</figcaption>
+          </figure>
+          <figure>
+            <div class="sheet"><canvas id="sheetB" aria-hidden="true"></canvas></div>
+            <figcaption><b>Test 11 · Repeatability</b>Ten passes over one square and one circle. The spread is about ±0.4 mm.</figcaption>
+          </figure>
+          <figure>
+            <div class="sheet"><canvas id="sheetC" aria-hidden="true"></canvas></div>
+            <figcaption><b>Test 15 · First word</b>Legible, but wobbly. The wobble is elbow backlash, fixed in the next revision.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="entry" id="how">
+      <div class="margin mono">How it writes</div>
+      <div class="page">
+        <h3>From a keystroke to a wet line</h3>
+        <ol class="steps">
+          <li><p style="margin:0"><b>Strokes, not outlines.</b> Each letter is stored as single-line strokes on a 10-unit grid, the way a person writes it, so the pen traces every line once.</p></li>
+          <li><p style="margin:0"><b>Plan the order.</b> Inside each letter the planner picks the nearest stroke next and reverses strokes when that saves travel. Paths are resampled every 0.5 mm.</p></li>
+          <li><p style="margin:0"><b>Solve the angles.</b> Every point (x, y, z) becomes four angles: the base turns to face it, the shoulder and elbow reach it, and the wrist keeps the pen vertical.</p></li>
+          <li><p style="margin:0"><b>Move and lift.</b> Angles stream to an Arduino at 50 Hz. Pen-up moves happen 12 mm above the paper.</p></li>
+        </ol>
+        <div class="eq">θ₁ = atan2(x, y)</div>
+        <div class="eq">r = √(x² + y²),  h = z + Lₜ − h₀ = z</div>
+        <div class="eq">β = arccos(√(r² + h²) / 2L)</div>
+        <div class="eq">θ₂ = atan2(h, r) + β,   θ₃ = −2β</div>
+        <div class="eq">θ₄ = −90° − θ₂ − θ₃</div>
+        <p style="margin-top:14px">Both links are 150 mm, and the pen tip hangs 96 mm below the wrist, the same as the shoulder height. So when the pen touches the paper the wrist is level with the shoulder, the two links form an isosceles triangle, and from above the elbow sits exactly halfway to the pen. The arm reaches about 300 mm, which covers an A4 sheet in landscape.</p>
+      </div>
+    </section>
+
+    <section class="entry" id="parts">
+      <div class="margin mono">Parts on<br>the bench</div>
+      <div class="page">
+        <h3>Parts list</h3>
+        <ul class="parts">
+          <li><span>3 × joint servo<small>MG996R, base, shoulder, elbow</small></span></li>
+          <li><span>1 × wrist servo<small>MG90S micro servo</small></span></li>
+          <li><span>Microcontroller<small>Arduino Nano</small></span></li>
+          <li><span>Servo driver<small>PCA9685, 16 channels</small></span></li>
+          <li><span>Printed links and turret<small>PLA, 150 mm centres</small></span></li>
+          <li><span>Bearings<small>51107 thrust, 4 × 608ZZ</small></span></li>
+          <li><span>Power supply<small>6 V, 5 A</small></span></li>
+          <li><span>Italic fountain pen<small>2.4 mm nib, blue-black ink</small></span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="entry" id="log">
+      <div class="margin mono">Build log</div>
+      <div class="page">
+        <h3>Notes from the build</h3>
+        <ol class="log">
+          <li><time datetime="2026-09-04">04 Sep 2026</time><span>Settled on a four-axis articulated arm. Reach study in Python says two 150 mm links cover A4.</span></li>
+          <li><time datetime="2026-09-18">18 Sep 2026</time><span>Printed the links and turret. Calibrated all four servos against a protractor jig; they are about 2° off at the ends of travel.</span></li>
+          <li><time datetime="2026-10-02">02 Oct 2026</time><span>Font, planner and kinematics work end to end. Test 11 shows ±0.4 mm repeatability.</span></li>
+          <li><time datetime="2026-10-16">16 Oct 2026</time><span>Added backlash compensation at the elbow. The first word that looks handwritten rather than shaky.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="entry" id="team">
+      <div class="margin mono">Signed</div>
+      <div class="page">
+        <h3>The team</h3>
+        <div class="team">
+          <div><div class="sig"><canvas data-sig="Your Name" aria-hidden="true"></canvas></div><p>Your Name<span>Mechanical design</span></p></div>
+          <div><div class="sig"><canvas data-sig="Teammate" aria-hidden="true"></canvas></div><p>Teammate<span>Software and kinematics</span></p></div>
+          <div><div class="sig"><canvas data-sig="Teammate" aria-hidden="true"></canvas></div><p>Teammate<span>Electronics and firmware</span></p></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="gutter">
+  <div class="inner mono">
+    <nav aria-label="Project links">
+      <a href="#" title="Add your repository link">Source code ↗</a>
+      <a href="#" title="Add your report link">Report ↗</a>
+      <a href="#" title="Add your video link">Demo video ↗</a>
+    </nav>
+    <span><span id="footName">Placeholder</span> · 2026</span>
+  </div>
+</footer>
+
+<script src="plotter.js"></script>
+<script>
+  /* Change the title here. */
+  const TITLE = 'Placeholder';
+
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    for (const id of ['siteTitle', 'logo', 'footName']) $(id).textContent = TITLE;
+    $('plotText').value = TITLE;
+    const INK = '#1f2b78';
+    const NIB_ANGLE = (40 * Math.PI) / 180;
+    const MONO = '"Spline Sans Mono", ui-monospace, monospace';
+
+    /* Broad-nib stroke: sweep a flat nib along the path, so width follows direction. */
+    function nib(ctx, pts, w, color = INK) {
+      const nx = (Math.cos(NIB_ANGLE) * w) / 2, ny = (-Math.sin(NIB_ANGLE) * w) / 2;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const cross = (b.x - a.x) * ny - (b.y - a.y) * nx;
+        const q = cross >= 0
+          ? [[a.x + nx, a.y + ny], [b.x + nx, b.y + ny], [b.x - nx, b.y - ny], [a.x - nx, a.y - ny]]
+          : [[a.x - nx, a.y - ny], [b.x - nx, b.y - ny], [b.x + nx, b.y + ny], [a.x + nx, a.y + ny]];
+        ctx.moveTo(q[0][0], q[0][1]);
+        for (let k = 1; k < 4; k++) ctx.lineTo(q[k][0], q[k][1]);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(0.9, w * 0.13);
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.stroke();
+    }
+
+    const sheet = (g) => {
+      const x0 = g.base.x - Math.max(g.halfW + 24, 130) * g.P, x1 = g.base.x + Math.max(g.halfW + 24, 130) * g.P;
+      const top = g.topMM - 6, gap = top - (g.textY + g.halfH);
+      const y0 = g.base.y - top * g.P, y1 = g.base.y - Math.max(66, g.textY - g.halfH - gap) * g.P;
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    };
+
+    function drawBg(ctx, g, api) {
+      const { W, H, base, P } = g;
+      // the mat: 10 mm grid, heavier every 50 mm, measured from the arm's base
+      ctx.fillStyle = '#2b6a55';
+      ctx.fillRect(0, 0, W, H);
+      const cell = 10 * P;
+      ctx.lineWidth = 1;
+      for (let i = Math.floor(-base.x / cell); i * cell + base.x < W; i++) {
+        const x = Math.round(base.x + i * cell) + 0.5;
+        ctx.strokeStyle = i % 5 === 0 ? 'rgba(214,240,228,0.32)' : 'rgba(214,240,228,0.12)';
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let j = Math.floor((base.y - H) / cell); base.y - j * cell > 0; j++) {
+        const y = Math.round(base.y - j * cell) + 0.5;
+        ctx.strokeStyle = j % 5 === 0 ? 'rgba(214,240,228,0.32)' : 'rgba(214,240,228,0.12)';
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(214,240,228,0.2)';
+      ctx.setLineDash([6, 6]);
+      for (const a of [-Math.PI / 4, -Math.PI / 3]) {
+        ctx.beginPath(); ctx.moveTo(0, H); ctx.lineTo(Math.cos(a) * W * 2, H + Math.sin(a) * W * 2); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(214,240,228,0.55)';
+      ctx.font = `400 9px ${MONO}`;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      for (let i = 0; base.x + i * cell * 5 < W; i++) ctx.fillText(String(i * 5), base.x + i * cell * 5 + 3, 3);
+
+      // the sheet, with soft shadow and tape
+      const S = sheet(g);
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.32)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetY = 6;
+      ctx.fillStyle = '#fdfdfb';
+      ctx.fillRect(S.x, S.y, S.w, S.h);
+      ctx.restore();
+      const tape = (x, y, rot) => {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rot);
+        ctx.fillStyle = 'rgba(232, 222, 188, 0.82)';
+        const tw = Math.max(36, Math.min(74, S.w * 0.08)), th = tw * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(-tw / 2, -th / 2);
+        for (let k = 0; k <= 6; k++) ctx.lineTo(-tw / 2 + (k % 2 ? 2 : 0), -th / 2 + (th * k) / 6);
+        ctx.lineTo(tw / 2, th / 2);
+        for (let k = 6; k >= 0; k--) ctx.lineTo(tw / 2 - (k % 2 ? 2 : 0), -th / 2 + (th * k) / 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      };
+      tape(S.x + 8, S.y + 6, -Math.PI / 4);
+      tape(S.x + S.w - 8, S.y + 6, Math.PI / 4);
+      tape(S.x + 8, S.y + S.h - 6, Math.PI / 4);
+      tape(S.x + S.w - 8, S.y + S.h - 6, -Math.PI / 4);
+      // light pencil baseline, ruled before writing
+      ctx.strokeStyle = 'rgba(60,70,90,0.18)';
+      for (let i = 0; i < api.layout.lines.length; i++) {
+        const y = g.oy + (i * 17 + 10) * g.scale + 1;
+        ctx.beginPath(); ctx.moveTo(S.x + 18, y); ctx.lineTo(S.x + S.w - 18, y); ctx.stroke();
+      }
+
+      // base plate, screwed to the bench
+      const s = 46 * P;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.38)';
+      ctx.shadowBlur = 14;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 7;
+      const pg = ctx.createLinearGradient(base.x - s, base.y - s, base.x + s, base.y + s);
+      pg.addColorStop(0, '#3c4250');
+      pg.addColorStop(1, '#232733');
+      ctx.fillStyle = pg;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(base.x - s, base.y - s, s * 2, s * 2, 8) : ctx.rect(base.x - s, base.y - s, s * 2, s * 2);
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = '#8b93a3';
+      for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        ctx.beginPath(); ctx.arc(base.x + dx * s * 0.8, base.y + dy * s * 0.8, Math.max(2, 3 * P), 0, 7); ctx.fill();
+      }
+    }
+
+    function aluminium(ctx, A, r1, B, r2, holes) {
+      const ang = Math.atan2(B.y - A.y, B.x - A.x);
+      let nx = -Math.sin(ang), ny = Math.cos(ang);
+      if (nx > 0) { nx = -nx; ny = -ny; }
+      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2, r = Math.max(r1, r2);
+      const gr = ctx.createLinearGradient(mx + nx * r, my + ny * r, mx - nx * r, my - ny * r);
+      gr.addColorStop(0, '#f3f5f7');
+      gr.addColorStop(0.5, '#c9ced5');
+      gr.addColorStop(1, '#8f96a0');
+      ctx.beginPath();
+      Plotter.capsule(ctx, A, r1, B, r2);
+      ctx.fillStyle = gr;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(40,46,60,0.35)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      const len = Math.hypot(B.x - A.x, B.y - A.y);
+      ctx.fillStyle = 'rgba(70,78,92,0.55)';
+      for (const u of holes) {
+        const rr = (r1 + (r2 - r1) * u) * 0.42;
+        if (len * 0.18 < rr * 2) continue;
+        ctx.beginPath(); ctx.arc(A.x + (B.x - A.x) * u, A.y + (B.y - A.y) * u, rr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function hub(ctx, c, r) {
+      const g = ctx.createRadialGradient(c.x - r * 0.3, c.y - r * 0.35, 1, c.x, c.y, r);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(1, '#a3aab4');
+      ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = 'rgba(40,46,60,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.3, 0, Math.PI * 2); ctx.fillStyle = '#5d6573'; ctx.fill();
+    }
+
+    function servo(ctx, c, ang, len, wid) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = '#25305e';
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(-len / 2, -wid / 2, len, wid, 3) : ctx.rect(-len / 2, -wid / 2, len, wid);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(-len / 2 + 2, -wid / 2 + 2, len - 4, wid * 0.3);
+      ctx.restore();
+    }
+
+    /* Shadow of the arm on the table: light from the upper left, so a point at height z
+       lands z·(0.12, −0.1) away. Drawn through an offset canvas shadow so it can blur. */
+    function shadow(ctx, st, g) {
+      const P = g.P, F = st.p3;
+      const S = (q) => g.project({ x: q.x + q.z * 0.12, y: q.y - q.z * 0.1, z: 0 });
+      const b = st.base, sh = S(F.shoulder), el = S(F.elbow), wr = S(F.wrist), tp = S(F.tip);
+      const off = 4000, dpr = ctx.getTransform().a;
+      ctx.save();
+      ctx.shadowColor = 'rgba(12,30,22,0.34)';
+      ctx.shadowBlur = 9 * dpr;
+      ctx.shadowOffsetX = off * dpr;
+      ctx.fillStyle = '#000';
+      ctx.translate(-off, 0);
+      for (const [A, ra, B, rb] of [[b, 22 * P, sh, 20 * P], [sh, 11 * P, el, 9 * P], [el, 9 * P, wr, 8 * P], [wr, 5 * P, tp, 2 * P]]) {
+        ctx.beginPath(); Plotter.capsule(ctx, A, ra, B, rb); ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawArm(ctx, st, g) {
+      const { base, shoulder, elbow, wrist, tip } = st, P = g.P;
+      const rT = 22 * P, r1 = 11 * P, r2 = 9 * P, r3 = 7.5 * P;
+      shadow(ctx, st, g);
+
+      // turret and shoulder servo
+      const tg = ctx.createLinearGradient(base.x - rT, 0, base.x + rT, 0);
+      tg.addColorStop(0, '#2c3340');
+      tg.addColorStop(0.45, '#4a5366');
+      tg.addColorStop(1, '#232834');
+      ctx.beginPath(); Plotter.capsule(ctx, base, rT, shoulder, rT * 0.9); ctx.fillStyle = tg; ctx.fill();
+      const plan = st.j.yaw;
+      servo(ctx, { x: shoulder.x + Math.cos(plan) * rT * 1.05, y: shoulder.y + Math.sin(plan) * rT * 1.05 }, plan + Math.PI / 2, 40 * P, 20 * P);
+
+      // pen, forearm, elbow servo, upper arm: far to near
+      const pg = ctx.createLinearGradient(wrist.x - r3, 0, wrist.x + r3, 0);
+      pg.addColorStop(0, '#2b3aa0');
+      pg.addColorStop(0.5, '#4757c8');
+      pg.addColorStop(1, '#17206a');
+      ctx.beginPath(); Plotter.capsule(ctx, wrist, r3 * 0.62, tip, Math.max(1.2, r3 * 0.18)); ctx.fillStyle = pg; ctx.fill();
+      aluminium(ctx, elbow, r2, wrist, r3, [0.36, 0.62]);
+      const fa = Math.atan2(wrist.y - elbow.y, wrist.x - elbow.x);
+      servo(ctx, { x: elbow.x - Math.sin(fa) * r2 * 1.3, y: elbow.y + Math.cos(fa) * r2 * 1.3 }, fa, 34 * P, 16 * P);
+      aluminium(ctx, shoulder, r1, elbow, r2 * 1.05, [0.3, 0.5, 0.7]);
+      hub(ctx, elbow, r2 * 0.75);
+      hub(ctx, shoulder, r1 * 0.8);
+      // wrist clamp and the silver cap of the pen
+      ctx.beginPath(); ctx.arc(wrist.x, wrist.y, r3 * 0.95, 0, Math.PI * 2); ctx.fillStyle = '#3a4150'; ctx.fill();
+      const cg = ctx.createRadialGradient(wrist.x - r3 * 0.25, wrist.y - r3 * 0.3, 0.5, wrist.x, wrist.y, r3 * 0.6);
+      cg.addColorStop(0, '#ffffff');
+      cg.addColorStop(1, '#9aa1ab');
+      ctx.beginPath(); ctx.arc(wrist.x, wrist.y, r3 * 0.6, 0, Math.PI * 2); ctx.fillStyle = cg; ctx.fill();
+    }
+
+    const p = Plotter.create($('stage'), {
+      text: TITLE,
+      wrap: (W) => (W < 600 ? 46 : W < 900 ? 70 : Infinity),
+      geometry: (W, H, box) => Plotter.articulatedGeometry(W, H, box, { k: 0, textY: 140, padTop: 16, padBottom: 10, armPad: 44 }),
+      bg: drawBg,
+      ink: (ctx, pts, info) => nib(ctx, pts, Math.max(2.6, info.geom.scale * 1.2)),
+      arm: drawArm
+    });
+    window.plotter = p;
+    if (document.fonts) document.fonts.ready.then(() => p.refresh());
+
+    $('plotForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $('plotText').value.trim();
+      if (v) p.setText(v);
+    });
+    $('replay').addEventListener('click', () => p.restart());
+
+    /* ── Static sheets and signatures, rendered with the same font and nib ── */
+    function paint(canvas, painter) {
+      const run = () => {
+        const w = canvas.clientWidth, h = canvas.clientHeight, r = Math.min(window.devicePixelRatio || 1, 2);
+        if (!w || !h) return;
+        canvas.width = Math.round(w * r);
+        canvas.height = Math.round(h * r);
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(r, 0, 0, r, 0, 0);
+        painter(ctx, w, h);
+      };
+      new ResizeObserver(run).observe(canvas);
+      run();
+    }
+    function textStrokes(text, x, y, size, opts = {}) {
+      const lay = Plotter.layoutText(text, { tracking: opts.tracking ?? 2.4, maxWidth: opts.maxWidth ?? Infinity });
+      const s = size / 10;
+      const ax = opts.center ? lay.width / 2 : 0;
+      return { lay, strokes: lay.strokes.map((st) => st.pts.map((q) => ({ x: x + (q.x - ax) * s, y: y + q.y * s }))) };
+    }
+    // deterministic noise for the wobble and the repeatability spread
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+
+    paint($('sheetA'), (ctx, w, h) => {
+      const size = w * 0.052, lines = ['ABCDEFGHIJKLM', 'NOPQRSTUVWXYZ', '0123456789 ?!'];
+      lines.forEach((l, i) => {
+        const { strokes } = textStrokes(l, w / 2, h * 0.2 + i * size * 2.3, size, { center: true });
+        strokes.forEach((s) => nib(ctx, s, Math.max(1.4, size * 0.09)));
+      });
+      ctx.fillStyle = 'rgba(28,34,54,0.5)';
+      ctx.font = `400 ${Math.max(8, w * 0.026)}px ${MONO}`;
+      ctx.fillText('T07  cap 6 mm', w * 0.06, h * 0.92);
+    });
+
+    paint($('sheetB'), (ctx, w, h) => {
+      seed = 11;
+      const cx1 = w * 0.32, cx2 = w * 0.68, cy = h * 0.48, R = h * 0.22, spread = w * 0.006;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(31,43,120,0.55)';
+      for (let k = 0; k < 10; k++) {
+        const jx = rnd() * spread, jy = rnd() * spread;
+        ctx.strokeRect(cx1 - R + jx, cy - R + jy, R * 2, R * 2);
+        ctx.beginPath(); ctx.arc(cx2 + rnd() * spread, cy + rnd() * spread, R, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(28,34,54,0.5)';
+      ctx.font = `400 ${Math.max(8, w * 0.026)}px ${MONO}`;
+      ctx.fillText('T11  10 passes', w * 0.06, h * 0.92);
+    });
+
+    paint($('sheetC'), (ctx, w, h) => {
+      seed = 5;
+      const size = w * 0.1;
+      const { strokes } = textStrokes('HELLO WORLD', w / 2, h * 0.36, size, { center: true, maxWidth: 40 });
+      strokes.forEach((s) => {
+        const ph = rnd() * 6;
+        nib(ctx, s.map((q, i) => ({ x: q.x + Math.sin(q.y * 0.3 + ph) * size * 0.05, y: q.y + Math.sin(q.x * 0.24 + ph) * size * 0.05 })), Math.max(1.6, size * 0.1));
+      });
+      ctx.fillStyle = 'rgba(28,34,54,0.5)';
+      ctx.font = `400 ${Math.max(8, w * 0.026)}px ${MONO}`;
+      ctx.fillText('T15  no backlash comp.', w * 0.06, h * 0.92);
+    });
+
+    document.querySelectorAll('canvas[data-sig]').forEach((c, i) => {
+      paint(c, (ctx, w, h) => {
+        const name = c.dataset.sig, size = Math.min(h * 0.42, w / 9);
+        const { strokes } = textStrokes(name, 6, h - size - 12, size, { tracking: 1.6 });
+        // signatures lean forward
+        strokes.forEach((s) => nib(ctx, s.map((q) => ({ x: q.x + (h - q.y) * 0.28, y: q.y })), Math.max(1.6, size * 0.13)));
+      });
+    });
+  })();
+</script>

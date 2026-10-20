@@ -1,0 +1,766 @@
+<title>Arm Plotter Blueprint</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one engineering drawing sheet. A double border frame with a zone ruler, the hero is
+     the drawing field, sections are lettered details, and a title block closes the sheet. */
+  :root {
+    --sheet: #0d3a66;          /* cyanotype ground */
+    --sheet-deep: #0a2f55;     /* recessed cells, link fill */
+    --line: #eaf3ff;           /* primary line work and text */
+    --line-2: #a8c6e8;         /* secondary lines, labels */
+    --grid: rgba(168, 198, 232, 0.10);
+    --grid-major: rgba(168, 198, 232, 0.17);
+    --redline: #ff9f87;        /* markup pencil: live and active things */
+    --f-display: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+    --f-body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+    --f-mono: 'Martian Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--sheet); }
+  body {
+    margin: 0;
+    background-color: var(--sheet);
+    background-image:
+      linear-gradient(var(--grid-major) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+    color: var(--line);
+    font: 400 17px/1.6 var(--f-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration-color: var(--redline); text-underline-offset: 3px; }
+  a:hover { color: var(--redline); }
+  :focus-visible { outline: 2px dashed var(--redline); outline-offset: 3px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .wrap {
+    padding-block: 22px 30px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .sheet {
+    max-width: 1240px;
+    margin: 0 auto;
+    border: 2px solid var(--line);
+    outline: 1px solid var(--line-2);
+    outline-offset: 5px;
+  }
+
+  /* zone ruler */
+  .zones {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    border-bottom: 1px solid var(--line-2);
+    font: 500 10px/1 var(--f-mono);
+    color: var(--line-2);
+  }
+  .zones span { padding: 5px 0; text-align: center; border-left: 1px solid var(--line-2); }
+  .zones span:first-child { border-left: 0; }
+
+  /* header strip */
+  .strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line-2);
+    font: 500 11px/1.4 var(--f-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .strip .dwg b { font-weight: 500; color: var(--redline); }
+  .strip nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+  .strip nav a { text-decoration: none; color: var(--line-2); }
+  .strip nav a:hover { color: var(--line); }
+
+  /* hero: the drawing field */
+  .field { position: relative; border-bottom: 1px solid var(--line-2); }
+  .stage { position: relative; height: clamp(440px, 54vw, 680px); overflow: hidden; }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .view-hint { position: absolute; left: 20px; top: 16px; font: 400 10px var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--line-2); pointer-events: none; }
+  .notes {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    width: min(330px, 34%);
+    padding: 14px 16px 16px;
+    border: 1px solid var(--line-2);
+    background: color-mix(in srgb, var(--sheet) 88%, transparent);
+    font: 400 11px/1.65 var(--f-mono);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .notes h2 { margin: 0 0 6px; font: 500 11px/1 var(--f-mono); letter-spacing: 0.12em; color: var(--line-2); }
+  .notes ol { margin: 0; padding-left: 18px; }
+  .notes li + li { margin-top: 4px; }
+  .status { margin: 10px 0 0; color: var(--redline); font-variant-numeric: tabular-nums; }
+  .plot-form { display: flex; gap: 8px; margin-top: 12px; }
+  .plot-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--line-2);
+    background: var(--sheet-deep);
+    color: var(--line);
+    font: 500 12px var(--f-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .btn {
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--line);
+    font: 500 11px var(--f-mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--line); color: var(--sheet); }
+  .btn.ghost { border-color: var(--line-2); color: var(--line-2); }
+
+  .lede {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 20px 40px;
+    align-items: end;
+    padding: 26px 20px 30px;
+    border-bottom: 1px solid var(--line-2);
+  }
+  .lede p.big {
+    margin: 0;
+    font: 500 clamp(26px, 3.4vw, 40px)/1.12 var(--f-display);
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+  .lede p.small { margin: 0; color: var(--line-2); max-width: 46ch; }
+
+  /* lettered details */
+  .detail { border-bottom: 1px solid var(--line-2); }
+  .detail > header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px dashed var(--line-2);
+  }
+  .bubble {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1.5px solid var(--line);
+    border-radius: 50%;
+    font: 600 20px/1 var(--f-display);
+  }
+  .detail h2 {
+    margin: 0;
+    font: 600 clamp(22px, 2.6vw, 30px)/1.1 var(--f-display);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  .detail header .scale { margin-left: auto; font: 400 10px var(--f-mono); letter-spacing: 0.1em; color: var(--line-2); text-transform: uppercase; white-space: nowrap; }
+  .body { padding: 26px 20px 30px; }
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px 44px; }
+  .cols > * { min-width: 0; }
+  .prose p { margin: 0 0 14px; max-width: 62ch; }
+  .prose p:last-child { margin-bottom: 0; }
+  .label { font: 500 10px/1.4 var(--f-mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--line-2); }
+
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 9px 12px; border: 1px solid var(--line-2); text-align: left; vertical-align: top; }
+  th { font: 500 10px/1.3 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--line-2); background: var(--sheet-deep); }
+  td { font-size: 15px; line-height: 1.45; }
+  td.num, th.num { text-align: center; width: 1%; white-space: nowrap; font-family: var(--f-mono); font-size: 12px; }
+  td.mono { font: 400 12px/1.5 var(--f-mono); }
+  .table-scroll { overflow-x: auto; }
+
+  .specs td:first-child { width: 46%; font: 500 10px/1.5 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--line-2); }
+  .specs td:last-child { font: 500 14px var(--f-mono); }
+
+  /* kinematics */
+  .diagram { width: 100%; height: auto; max-width: 100%; color: var(--line); }
+  .eq {
+    margin: 0 0 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--line-2);
+    background: var(--sheet-deep);
+    font: 400 14px/1.7 var(--f-mono);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .eq .tag { float: right; color: var(--line-2); margin-left: 16px; }
+  .readout { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--redline); margin-top: 18px; }
+  .readout div { padding: 10px 12px; border-left: 1px solid color-mix(in srgb, var(--redline) 50%, transparent); }
+  .readout div:first-child { border-left: 0; }
+  .readout b { display: block; font: 500 16px/1.3 var(--f-mono); color: var(--redline); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* process flow */
+  .flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 26px; counter-reset: step; list-style: none; margin: 0; padding: 0; }
+  .flow li { position: relative; padding: 14px 14px 16px; border: 1px solid var(--line); min-width: 0; }
+  .flow li::before {
+    counter-increment: step;
+    content: '0' counter(step);
+    display: block;
+    margin-bottom: 8px;
+    font: 500 10px var(--f-mono);
+    letter-spacing: 0.12em;
+    color: var(--redline);
+  }
+  .flow li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -26px;
+    width: 26px;
+    border-top: 1px solid var(--line);
+  }
+  .flow h3 { margin: 0 0 6px; font: 600 18px/1.15 var(--f-display); letter-spacing: 0.05em; text-transform: uppercase; }
+  .flow p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--line-2); }
+
+  .rev-tri {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    height: 23px;
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    background: var(--line);
+    color: var(--sheet);
+    font: 600 11px/1 var(--f-mono);
+    padding-top: 6px;
+  }
+  tr.current td { color: var(--redline); }
+  tr.current .rev-tri { background: var(--redline); }
+
+  /* title block */
+  .titleblock { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; }
+  .titleblock > div { padding: 10px 14px; border-left: 1px solid var(--line-2); border-top: 1px solid var(--line-2); min-width: 0; }
+  .titleblock > div:nth-child(4n + 1) { border-left: 0; }
+  .titleblock .v { display: block; margin-top: 2px; font: 500 14px/1.35 var(--f-mono); }
+  .titleblock .project { grid-row: span 2; }
+  .titleblock .project .v { font: 600 clamp(28px, 3.6vw, 44px)/1 var(--f-display); letter-spacing: 0.04em; text-transform: uppercase; overflow-wrap: anywhere; }
+  .titleblock .links { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px 26px; align-items: baseline; border-left: 0; }
+  .titleblock .links a { font: 500 12px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+  .titleblock .team .v { font-family: var(--f-body); font-size: 15px; }
+  .titleblock .team small { display: block; color: var(--line-2); font: 400 11px var(--f-mono); }
+
+  @media (max-width: 980px) {
+    .flow { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    .flow li:not(:last-child)::after { top: auto; bottom: -18px; right: auto; left: 28px; width: 0; height: 18px; border-top: 0; border-left: 1px solid var(--line); }
+  }
+  @media (max-width: 860px) {
+    .notes { position: static; width: auto; margin: 0; border-width: 1px 0 0; background: transparent; }
+    .lede, .cols { grid-template-columns: minmax(0, 1fr); }
+    .titleblock { grid-template-columns: 1fr 1fr; }
+    .titleblock > div:nth-child(4n + 1) { border-left: 1px solid var(--line-2); }
+    .titleblock > div:nth-child(2n + 1) { border-left: 0; }
+    .titleblock .project { grid-column: 1 / -1; grid-row: auto; }
+    .readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .readout div:nth-child(3) { border-left: 0; }
+    .readout div:nth-child(n + 3) { border-top: 1px solid color-mix(in srgb, var(--redline) 50%, transparent); }
+  }
+  @media (max-width: 520px) {
+    body { font-size: 16px; }
+    .strip nav { display: none; }
+    .detail header .scale, .view-hint { display: none; }
+    .body, .lede { padding-inline: 14px; }
+  }
+</style>
+
+<div class="wrap">
+  <div class="sheet">
+    <div class="zones" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
+
+    <div class="strip">
+      <div class="dwg">DWG No. <b>PH-001</b> · Robotic drawing arm</div>
+      <nav aria-label="Sections">
+        <a href="#overview">A · Overview</a>
+        <a href="#kinematics">B · Kinematics</a>
+        <a href="#process">C · Process</a>
+        <a href="#bom">D · Parts</a>
+        <a href="#revisions">E · Build log</a>
+      </nav>
+      <div>Rev D · 2026-10-16</div>
+    </div>
+
+    <header class="field">
+      <h1 class="sr-only" id="siteTitle">Placeholder</h1>
+      <div class="stage" id="stage"><span class="view-hint">Plan view · seen from directly above</span></div>
+      <aside class="notes" aria-label="Drawing notes">
+        <h2>Notes</h2>
+        <ol>
+          <li>The title is plotted live by a model of the arm, running the same inverse kinematics as the build.</li>
+          <li>Plan view. The elbow is a single hinge, so both links stay in line with the pen; folding only shortens them. View A–A shows the fold.</li>
+          <li>Dimensions in mm. Type any word below to re-plot it.</li>
+        </ol>
+        <p class="status" id="status" aria-live="off">Status: ready</p>
+        <form class="plot-form" id="plotForm">
+          <label class="sr-only" for="plotText">Text to plot</label>
+          <input id="plotText" maxlength="24" autocomplete="off" spellcheck="false">
+          <button class="btn" type="submit">Plot</button>
+          <button class="btn ghost" type="button" id="replay">Replay</button>
+        </form>
+      </aside>
+    </header>
+
+    <section class="lede">
+      <p class="big">A four-axis robotic arm that turns typed text into ink on paper.</p>
+      <p class="small">A turning base, a shoulder and an elbow carry the pen; a wrist keeps it pointing straight down. A small planner works out every joint angle along the way. This page documents how it was designed, built and tuned.</p>
+    </section>
+
+    <section class="detail" id="overview">
+      <header><span class="bubble">A</span><h2>Overview</h2><span class="scale">Scale 1:1</span></header>
+      <div class="body cols">
+        <div class="prose">
+          <p>The arm is a four-axis articulated manipulator. The base turns the whole arm about a vertical axis (θ₁), the shoulder and elbow pitch the two links (θ₂, θ₃), and the wrist (θ₄) counter-rotates so the pen always points straight down at the paper. Every joint is a hobby servo, so the machine can be built from printed parts and a microcontroller.</p>
+          <p>To write, the software turns each character into single-line strokes, orders them to keep pen-up travel short, and solves all four joint angles for every point along the way. Between strokes the arm lifts the pen 12 mm in Z rather than using a separate lift mechanism.</p>
+          <p>The aim of the project was to get from a typed word to a legible, repeatable result with inexpensive parts, and to understand where the error comes from when it isn't.</p>
+        </div>
+        <div>
+          <div class="label" style="margin-bottom:8px">General specifications</div>
+          <table class="specs">
+            <tr><td>Axes</td><td>4 · base, shoulder, elbow, wrist</td></tr>
+            <tr><td>Links L₁ = L₂ = L</td><td>150 mm</td></tr>
+            <tr><td>Shoulder height h₀</td><td>96 mm</td></tr>
+            <tr><td>Wrist to pen tip Lₜ</td><td>96 mm (= h₀)</td></tr>
+            <tr><td>Reach</td><td>300 mm</td></tr>
+            <tr><td>Drawing area</td><td>A4 landscape</td></tr>
+            <tr><td>Repeatability</td><td>±0.5 mm</td></tr>
+            <tr><td>Writing speed</td><td>≈ 40 mm/s</td></tr>
+            <tr><td>Control rate</td><td>50 Hz</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="detail" id="kinematics">
+      <header><span class="bubble">B</span><h2>Kinematics</h2><span class="scale">Not to scale</span></header>
+      <div class="body cols">
+        <svg class="diagram" viewBox="0 0 400 300" role="img" aria-label="Side view of the arm: two equal links L form an isosceles triangle with the wrist level with the shoulder, the pen hangs Lt below the wrist, with joint angles theta 2 to 4, with a top view inset showing the base angle theta 1">
+          <g fill="none" stroke="currentColor" stroke-linecap="round">
+            <path d="M14 262 H300" stroke-width="1" />
+            <path d="M30 262 l-8 9 M44 262 l-8 9 M58 262 l-8 9 M72 262 l-8 9 M86 262 l-8 9" stroke-width="0.8" opacity="0.7" />
+            <path d="M34 262 V246 H86 V262" stroke-width="1.2" />
+            <path d="M48 246 V185 M72 246 V185" stroke-width="1.1" />
+            <path d="M24 262 V185 M20 185 H52" stroke-width="0.7" opacity="0.75" />
+            <path d="M60 286 H250 M60 280 V292 M250 280 V292" stroke-width="0.7" opacity="0.75" />
+            <path d="M60 185 H250" stroke-dasharray="5 4" stroke-width="0.8" opacity="0.7" />
+            <path d="M155 111.7 L190.6 84.2 M250 185 L281.6 209.5" stroke-dasharray="4 4" stroke-width="0.8" opacity="0.8" />
+            <path d="M60 185 L155 111.7" stroke-width="4.5" />
+            <path d="M155 111.7 L250 185" stroke-width="4.5" />
+            <path d="M250 185 V258" stroke-width="3" />
+            <path d="M94 185 A34 34 0 0 0 86.9 164.2" stroke-width="1" stroke="var(--redline)" />
+            <path d="M178.7 93.3 A30 30 0 0 1 178.7 130.1" stroke-width="1" stroke="var(--redline)" />
+            <path d="M267.4 198.5 A22 22 0 0 1 250 207" stroke-width="1" stroke="var(--redline)" />
+            <rect x="298" y="8" width="94" height="86" stroke-width="0.8" opacity="0.75" />
+            <path d="M330 72 V20" stroke-dasharray="4 3" stroke-width="0.8" opacity="0.8" />
+            <path d="M330 72 L366 30" stroke-width="3" />
+            <path d="M330 50 A22 22 0 0 1 344.3 55.3" stroke-width="1" stroke="var(--redline)" />
+          </g>
+          <g fill="var(--sheet)" stroke="currentColor" stroke-width="1.5">
+            <circle cx="60" cy="185" r="7" />
+            <circle cx="155" cy="111.7" r="6" />
+            <circle cx="250" cy="185" r="5" />
+            <circle cx="330" cy="72" r="7" />
+            <circle cx="250" cy="262" r="3.5" fill="var(--redline)" stroke="var(--redline)" />
+          </g>
+          <g fill="currentColor" font-family="Martian Mono, monospace" font-size="11">
+            <text x="88" y="138">L</text>
+            <text x="212" y="138">L</text>
+            <text x="226" y="232">Lₜ</text>
+            <text x="4" y="228">h₀</text>
+            <text x="150" y="278">r</text>
+            <text x="98" y="178" fill="var(--redline)">θ₂</text>
+            <text x="188" y="116" fill="var(--redline)">θ₃</text>
+            <text x="268" y="224" fill="var(--redline)">θ₄</text>
+            <text x="348" y="50" fill="var(--redline)">θ₁</text>
+            <text x="304" y="88" font-size="8" opacity="0.8">TOP VIEW</text>
+            <text x="334" y="22" font-size="9">y</text>
+          </g>
+        </svg>
+        <div>
+          <p class="label" style="margin:0 0 8px">Inverse kinematics, equal links L, pen vertical, elbow up</p>
+          <div class="eq"><span class="tag">(1)</span>θ₁ = atan2(x, y)</div>
+          <div class="eq"><span class="tag">(2)</span>r = √(x² + y²),  h = z + Lₜ − h₀ = z</div>
+          <div class="eq"><span class="tag">(3)</span>β = arccos(√(r² + h²) / 2L)</div>
+          <div class="eq"><span class="tag">(4)</span>θ₂ = atan2(h, r) + β,   θ₃ = −2β</div>
+          <div class="eq"><span class="tag">(5)</span>θ₄ = −90° − θ₂ − θ₃</div>
+          <p class="prose" style="margin:0;color:var(--line-2);font-size:15px">The base angle comes straight from the target's bearing. With two equal links, shoulder, elbow and wrist form an isosceles triangle, so a single arccos solves it. The pen hangs Lₜ = h₀ below the wrist, so with the pen on the paper the wrist is level with the shoulder and, seen from above, the elbow sits exactly halfway to the pen. The values below are the arm in the header right now.</p>
+          <div class="readout" aria-label="Live joint readout">
+            <div><span class="label">θ₁ base</span><b id="roT1">0.0°</b></div>
+            <div><span class="label">θ₂ shoulder</span><b id="roT2">0.0°</b></div>
+            <div><span class="label">θ₃ elbow</span><b id="roT3">0.0°</b></div>
+            <div><span class="label">θ₄ wrist</span><b id="roT4">0.0°</b></div>
+          </div>
+          <p class="label" style="margin:10px 0 0;font-variant-numeric:tabular-nums" id="roXYZ">Pen at x 0.0 · y 0.0 · z 0.0 mm</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="detail" id="process">
+      <header><span class="bubble">C</span><h2>From keystroke to ink</h2><span class="scale">Process flow</span></header>
+      <div class="body">
+        <ol class="flow">
+          <li><h3>Text input</h3><p>A word typed into the web interface or passed on the command line.</p></li>
+          <li><h3>Stroke font</h3><p>Every glyph is stored as single-line strokes on a 10-unit cap height, so the pen traces each line once.</p></li>
+          <li><h3>Path planner</h3><p>Strokes are ordered and reversed where it shortens pen-up travel, then resampled every 0.5 mm. Pen-up moves rise to z = 12 mm.</p></li>
+          <li><h3>Inverse kinematics</h3><p>Each sample (x, y, z) becomes four joint angles θ₁ to θ₄ using equations 1 to 5.</p></li>
+          <li><h3>Servo driver</h3><p>Angles map to PWM pulse widths on four channels at 50 Hz.</p></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="detail" id="bom">
+      <header><span class="bubble">D</span><h2>Bill of materials</h2><span class="scale">9 line items</span></header>
+      <div class="body table-scroll">
+        <table>
+          <thead><tr><th class="num">Item</th><th class="num">Qty</th><th>Description</th><th>Specification</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td class="num">3</td><td>Joint servo, base, shoulder and elbow</td><td class="mono">MG996R, 11 kg·cm @ 6 V</td></tr>
+            <tr><td class="num">2</td><td class="num">1</td><td>Wrist servo</td><td class="mono">MG90S metal-gear micro servo</td></tr>
+            <tr><td class="num">3</td><td class="num">1</td><td>Microcontroller</td><td class="mono">Arduino Nano, ATmega328P</td></tr>
+            <tr><td class="num">4</td><td class="num">1</td><td>Servo driver board</td><td class="mono">PCA9685, 16 ch, 12-bit PWM</td></tr>
+            <tr><td class="num">5</td><td class="num">2</td><td>Arm links</td><td class="mono">PLA, printed, 150 mm centres</td></tr>
+            <tr><td class="num">6</td><td class="num">1</td><td>Turntable bearing</td><td class="mono">51107 thrust bearing</td></tr>
+            <tr><td class="num">7</td><td class="num">4</td><td>Joint bearings</td><td class="mono">608ZZ, 8 × 22 × 7 mm</td></tr>
+            <tr><td class="num">8</td><td class="num">1</td><td>Power supply</td><td class="mono">6 V DC, 5 A</td></tr>
+            <tr><td class="num">9</td><td class="num">1</td><td>Pen and clamp</td><td class="mono">0.5 mm fineliner</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="detail" id="revisions">
+      <header><span class="bubble">E</span><h2>Revision history</h2><span class="scale">Build log</span></header>
+      <div class="body table-scroll">
+        <table>
+          <thead><tr><th class="num">Rev</th><th class="num">Date</th><th>Description</th><th class="num">By</th></tr></thead>
+          <tbody>
+            <tr><td class="num"><span class="rev-tri">A</span></td><td class="num">2026-09-04</td><td>Concept frozen: four-axis articulated arm, kinematic model and reach study in Python.</td><td class="num">YN</td></tr>
+            <tr><td class="num"><span class="rev-tri">B</span></td><td class="num">2026-09-18</td><td>First printed links and turret. All four servos calibrated against a protractor jig.</td><td class="num">TM</td></tr>
+            <tr><td class="num"><span class="rev-tri">C</span></td><td class="num">2026-10-02</td><td>Stroke font, path planner and IK running end to end on the bench.</td><td class="num">YN</td></tr>
+            <tr class="current"><td class="num"><span class="rev-tri">D</span></td><td class="num">2026-10-16</td><td>First legible word on paper. Backlash compensation added at the elbow. Project site published.</td><td class="num">TM</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="titleblock" aria-label="Title block">
+      <div class="project"><span class="label">Project</span><span class="v" id="tbTitle">Placeholder</span></div>
+      <div><span class="label">Dwg no.</span><span class="v">PH-001</span></div>
+      <div><span class="label">Scale</span><span class="v">1:1</span></div>
+      <div><span class="label">Sheet</span><span class="v">1 of 1</span></div>
+      <div class="team"><span class="label">Drawn</span><span class="v">Your Name<small>Mechanical</small></span></div>
+      <div class="team"><span class="label">Checked</span><span class="v">Teammate<small>Software</small></span></div>
+      <div class="team"><span class="label">Approved</span><span class="v">Teammate<small>Electronics</small></span></div>
+      <div class="links">
+        <span class="label">References</span>
+        <a href="#" title="Add your repository link">Source code ↗</a>
+        <a href="#" title="Add your report link">Project report ↗</a>
+        <a href="#" title="Add your video link">Demo video ↗</a>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script src="plotter.js"></script>
+<script>
+  /* Change the title here. */
+  const TITLE = 'Placeholder';
+
+  (function () {
+    const C = { line: '#eaf3ff', dim: '#a8c6e8', red: '#ff9f87', fill: 'rgba(10, 47, 85, 0.94)' };
+    const MONO = '"Martian Mono", ui-monospace, monospace';
+    const $ = (id) => document.getElementById(id);
+    $('siteTitle').textContent = TITLE;
+    $('tbTitle').textContent = TITLE;
+    $('plotText').value = TITLE.toUpperCase();
+
+    const line = (ctx, a, b) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+    const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+    const f1 = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}°`;
+    function label(ctx, text, x, y, ang = 0, align = 'center') {
+      ctx.save();
+      ctx.translate(x, y);
+      let a = norm(ang);
+      if (a > Math.PI / 2 || a < -Math.PI / 2) a += Math.PI;
+      ctx.rotate(a);
+      ctx.textAlign = align;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+    }
+    function arrow(ctx, p, ang, s = 7) {
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - s * Math.cos(ang - 0.28), p.y - s * Math.sin(ang - 0.28));
+      ctx.lineTo(p.x - s * Math.cos(ang + 0.28), p.y - s * Math.sin(ang + 0.28));
+      ctx.closePath();
+      ctx.fill();
+    }
+    function joint(ctx, c, r) {
+      ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, Math.PI * 2); ctx.fillStyle = C.fill; ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(c.x, c.y, r * 0.42, 0, Math.PI * 2); ctx.stroke();
+      ctx.save();
+      ctx.lineWidth = 0.7;
+      ctx.strokeStyle = C.dim;
+      line(ctx, { x: c.x - r * 1.5, y: c.y }, { x: c.x + r * 1.5, y: c.y });
+      line(ctx, { x: c.x, y: c.y - r * 1.5 }, { x: c.x, y: c.y + r * 1.5 });
+      ctx.restore();
+    }
+    function centerline(ctx, a, b, ext) {
+      const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+      line(ctx, { x: a.x - ux * ext, y: a.y - uy * ext }, { x: b.x + ux * ext, y: b.y + uy * ext });
+    }
+
+    function drawBg(ctx, g, api) {
+      const { base, P } = g;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = C.dim;
+      ctx.fillStyle = C.dim;
+      ctx.font = `400 10px ${MONO}`;
+
+      // lettering guidelines, ruled before the lettering like on a drafting board
+      ctx.lineWidth = 0.7;
+      ctx.setLineDash([2, 5]);
+      for (let i = 0; i < api.layout.lines.length; i++) {
+        const top = g.oy + i * 17 * g.scale, bot = top + 10 * g.scale;
+        line(ctx, { x: g.ox - 30, y: top }, { x: g.ox + g.tw + 30, y: top });
+        line(ctx, { x: g.ox - 30, y: bot }, { x: g.ox + g.tw + 30, y: bot });
+      }
+      ctx.setLineDash([]);
+      const hx = g.ox - 40, top = g.oy, bot = g.oy + 10 * g.scale;
+      if (hx > 30) {
+        line(ctx, { x: hx, y: top }, { x: hx, y: bot });
+        arrow(ctx, { x: hx, y: top }, -Math.PI / 2, 6);
+        arrow(ctx, { x: hx, y: bot }, Math.PI / 2, 6);
+        label(ctx, `h ${(10 * g.mmPerUnit).toFixed(1)}`, hx - 12, (top + bot) / 2, -Math.PI / 2);
+      }
+
+      // robot axes on the table: Y straight ahead, X to the right
+      ctx.setLineDash([14, 3, 2, 3]);
+      line(ctx, { x: base.x, y: base.y + 64 * P }, { x: base.x, y: 12 });
+      line(ctx, { x: base.x - 90 * P, y: base.y }, { x: base.x + 90 * P, y: base.y });
+      ctx.setLineDash([]);
+      ctx.textAlign = 'left';
+      ctx.fillText('Y', base.x + 6, 20);
+      ctx.fillText('X', base.x + 92 * P, base.y - 8);
+
+      // reach envelope on the table
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([10, 4, 2, 4]);
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, g.reach, Math.PI, 2 * Math.PI);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const ea = -Math.PI * 0.18, er = g.reach + 12;
+      label(ctx, `R ${g.rMax.toFixed(0)} WORK ENVELOPE`, base.x + er * Math.cos(ea), base.y + er * Math.sin(ea), ea + Math.PI / 2);
+
+      // base plate in section
+      const R = 52 * P;
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, R, 0, Math.PI * 2);
+      ctx.fillStyle = C.fill;
+      ctx.fill();
+      ctx.save();
+      ctx.clip();
+      ctx.strokeStyle = C.dim;
+      ctx.lineWidth = 0.7;
+      for (let x = base.x - R * 2; x < base.x + R * 2; x += 6) line(ctx, { x, y: base.y + R }, { x: x + 2 * R, y: base.y - R });
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, R, 0, Math.PI * 2);
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      ctx.fillStyle = C.line;
+      for (let i = 0; i < 4; i++) {
+        const a = Math.PI / 4 + (i * Math.PI) / 2;
+        ctx.beginPath(); ctx.arc(base.x + Math.cos(a) * R * 0.8, base.y + Math.sin(a) * R * 0.8, 2.2, 0, 7); ctx.fill();
+      }
+    }
+
+    function drawInk(ctx, pts, info) {
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = Math.max(1.6, info.geom.scale * 0.3);
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.beginPath();
+      pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+      ctx.stroke();
+    }
+
+    /* side elevation of the arm's vertical plane: where the shoulder and elbow bends show */
+    function sideView(ctx, st, g, box) {
+      const d = g.d, F = st.p3;
+      ctx.save();
+      ctx.fillStyle = C.fill;
+      ctx.strokeStyle = C.dim;
+      ctx.lineWidth = 0.8;
+      ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.strokeRect(box.x, box.y, box.w, box.h);
+      ctx.fillStyle = C.dim;
+      ctx.font = `400 9px ${MONO}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('VIEW A-A · SIDE ELEVATION', box.x + 8, box.y + 14);
+      const r0 = -90, r1 = 330, z0 = -14, z1 = 270;
+      const sc = Math.min((box.w - 20) / (r1 - r0), (box.h - 30) / (z1 - z0));
+      const ox = box.x + 10 - r0 * sc, oy = box.y + box.h - 8 + z0 * sc;
+      const Q = (r, z) => ({ x: ox + r * sc, y: oy - z * sc });
+      ctx.strokeStyle = C.line;
+      line(ctx, Q(-80, 0), Q(320, 0));
+      ctx.strokeStyle = C.dim;
+      for (let r = -76; r < 320; r += 10) line(ctx, Q(r, 0), Q(r - 6, -8));
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1.1;
+      ctx.strokeRect(Q(-26, d.h0).x, Q(0, d.h0).y, 52 * sc, d.h0 * sc);
+      const S = Q(0, d.h0), E = Q(F.elbow.r, F.elbow.z), Wr = Q(F.wrist.r, F.wrist.z), T = Q(F.tip.r, F.tip.z);
+      ctx.lineWidth = 3;
+      line(ctx, S, E);
+      ctx.lineWidth = 2.4;
+      line(ctx, E, Wr);
+      ctx.lineWidth = 1.6;
+      line(ctx, Wr, T);
+      ctx.lineWidth = 0.8;
+      ctx.strokeStyle = C.red;
+      const q2 = st.j.q2, q3 = st.j.q3;
+      ctx.beginPath(); ctx.arc(S.x, S.y, 16, -q2, 0, q2 < 0); ctx.stroke();
+      ctx.beginPath(); ctx.arc(E.x, E.y, 14, -q2, -(q2 + q3), q3 > 0); ctx.stroke();
+      ctx.fillStyle = C.red;
+      ctx.font = `400 9px ${MONO}`;
+      ctx.fillText('θ₂', S.x + 18, S.y - 6);
+      ctx.fillText('θ₃', E.x + 10, E.y + 18);
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1;
+      for (const [p, r] of [[S, 3.5], [E, 3], [Wr, 2.5]]) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fillStyle = C.fill; ctx.fill(); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(T.x, T.y, 2.5, 0, 7); ctx.fillStyle = st.z < 0.5 ? C.red : C.line; ctx.fill();
+      ctx.restore();
+    }
+
+    function drawArm(ctx, st, g, api) {
+      const { base, shoulder, elbow, wrist, tip } = st, P = g.P, F = st.p3;
+      const rT = 24 * P, r1 = 10 * P, r2 = 8 * P, r3 = 6.5 * P;
+      ctx.lineCap = ctx.lineJoin = 'round';
+      ctx.font = `400 10px ${MONO}`;
+
+      // the fresh part of the stroke, in markup red
+      const trail = api.trail(3.5);
+      if (trail) {
+        ctx.strokeStyle = C.red;
+        ctx.lineWidth = Math.max(1.6, g.scale * 0.3) + 0.6;
+        ctx.beginPath();
+        trail.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+        ctx.stroke();
+      }
+
+      // θ1 on the table, measured from straight ahead
+      const yaw = st.j.yaw, R1 = 52 * P + 22, a0 = -Math.PI / 2, a1 = -Math.PI / 2 + yaw;
+      ctx.strokeStyle = C.red;
+      ctx.fillStyle = C.red;
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, R1, Math.min(a0, a1), Math.max(a0, a1));
+      ctx.stroke();
+      arrow(ctx, { x: base.x + R1 * Math.cos(a1), y: base.y + R1 * Math.sin(a1) }, a1 + (yaw >= 0 ? Math.PI / 2 : -Math.PI / 2), 6);
+      label(ctx, `θ₁ ${f1(st.joints.j1)}`, base.x + (R1 + 34) * Math.cos(a0 + yaw / 2 + (yaw >= 0 ? 0.35 : -0.35)), base.y + (R1 + 34) * Math.sin(a0 + yaw / 2 + (yaw >= 0 ? 0.35 : -0.35)));
+
+      // turret, links and pen
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1.4;
+      ctx.fillStyle = C.fill;
+      ctx.beginPath(); ctx.arc(base.x, base.y, rT, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); Plotter.capsule(ctx, elbow, r2, wrist, r3); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); Plotter.capsule(ctx, shoulder, r1, elbow, r2); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = C.dim;
+      ctx.lineWidth = 0.7;
+      ctx.setLineDash([16, 3, 2, 3]);
+      centerline(ctx, shoulder, elbow, r1 * 1.4);
+      centerline(ctx, elbow, wrist, r2 * 1.4);
+      ctx.setLineDash([]);
+      ctx.strokeStyle = C.line;
+      ctx.lineWidth = 1.2;
+      joint(ctx, shoulder, r1 * 0.9);
+      joint(ctx, elbow, r2 * 0.9);
+      joint(ctx, wrist, r3 * 0.8);
+
+      // joint values (the side view and readout carry them on small screens)
+      const narrow = g.W < 600;
+      ctx.fillStyle = C.line;
+      ctx.textBaseline = 'middle';
+      const side = st.j.yaw >= 0 ? -1 : 1;
+      ctx.textAlign = side < 0 ? 'right' : 'left';
+      if (!narrow) {
+        ctx.fillText(`θ₂ ${f1(st.joints.j2)}`, shoulder.x + side * (rT + 10), shoulder.y);
+        ctx.fillText(`θ₃ ${f1(st.joints.j3)}`, elbow.x + side * (r2 + 12), elbow.y - 6);
+        ctx.fillStyle = C.dim;
+        ctx.fillText(`z ${F.elbow.z.toFixed(0)}`, elbow.x + side * (r2 + 12), elbow.y + 8);
+        ctx.fillStyle = C.line;
+        ctx.fillText(`θ₄ ${f1(st.joints.j4)}`, wrist.x + side * (r3 + 12), wrist.y);
+      }
+
+      // pen and coordinate leader
+      const down = st.z < 0.5;
+      ctx.strokeStyle = down ? C.red : C.line;
+      ctx.fillStyle = down ? C.red : C.fill;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(tip.x, tip.y, 3 + st.z * 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const flip = tip.x < base.x - 20 || tip.x + (narrow ? 100 : 150) > g.W;
+      const lx = tip.x + (flip ? -26 : 26), ly = tip.y + 30;
+      ctx.strokeStyle = C.dim;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(tip.x + (flip ? -4 : 4), tip.y + 5); ctx.lineTo(lx, ly); ctx.lineTo(lx + (flip ? -124 : 124), ly); ctx.stroke();
+      ctx.textAlign = flip ? 'right' : 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = down ? C.red : C.line;
+      ctx.fillText(narrow ? `${F.tip.x.toFixed(0)}, ${F.tip.y.toFixed(0)}, ${F.tip.z.toFixed(0)}` : `X ${F.tip.x.toFixed(1)}  Y ${F.tip.y.toFixed(1)}  Z ${F.tip.z.toFixed(1)}`, lx + (flip ? -2 : 2), ly - 6);
+      ctx.fillStyle = C.dim;
+      ctx.fillText(down ? 'PEN DOWN' : 'PEN UP', lx + (flip ? -2 : 2), ly + 13);
+
+      if (g.W >= 760) sideView(ctx, st, g, { x: 18, y: g.H - 178, w: Math.min(250, g.W * 0.24), h: 160 });
+    }
+
+    const ro = { t1: $('roT1'), t2: $('roT2'), t3: $('roT3'), t4: $('roT4'), xyz: $('roXYZ'), status: $('status') };
+    let lastStatus = '';
+    function frame(st, api) {
+      const J = st.joints, t3 = st.tip3;
+      ro.t1.textContent = f1(J.j1);
+      ro.t2.textContent = f1(J.j2);
+      ro.t3.textContent = f1(J.j3);
+      ro.t4.textContent = f1(J.j4);
+      ro.xyz.textContent = `Pen at x ${t3.x.toFixed(1)} · y ${t3.y.toFixed(1)} · z ${t3.z.toFixed(1)} mm`;
+      const s = st.done ? 'Status: plot complete' : st.si < 0 ? 'Status: travelling, pen up' :
+        `Status: stroke ${st.si + 1} of ${api.plan.strokes.length} · ${Math.round(st.progress * 100)}%`;
+      if (s !== lastStatus) { ro.status.textContent = s; lastStatus = s; }
+    }
+
+    const p = Plotter.create($('stage'), {
+      text: TITLE,
+      wrap: (W) => (W < 600 ? 46 : W < 900 ? 70 : Infinity),
+      geometry: (W, H, box) => Plotter.articulatedGeometry(W, H, box, { k: 0, textY: 140, padTop: 36, padBottom: 16, dims: { home: { x: -150, y: 20, z: 60 } } }),
+      bg: drawBg,
+      ink: drawInk,
+      arm: drawArm,
+      frame
+    });
+    window.plotter = p;
+    if (document.fonts) document.fonts.ready.then(() => p.refresh());
+
+    $('plotForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const v = $('plotText').value.trim();
+      if (v) p.setText(v);
+    });
+    $('replay').addEventListener('click', () => p.restart());
+  })();
+</script>
