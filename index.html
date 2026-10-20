@@ -196,8 +196,9 @@
   .vote { text-align: center; padding-block: 130px 120px; }
   .vote p.sub { margin: 16px auto 0; max-width: 36ch; font-size: clamp(19px, 1.9vw, 24px); line-height: 1.35; color: var(--muted); }
   .qr { display: inline-flex; align-items: center; gap: 22px; margin-top: 52px; padding: 22px 28px 22px 22px; border-radius: 28px; background: var(--gray); text-align: left; max-width: 100%; }
-  .qr-box { flex: none; display: grid; place-items: center; width: 132px; height: 132px; padding: 10px; border-radius: 16px; background: var(--white); }
-  .qr-box img { display: block; width: 100%; height: 100%; }
+  .qr-box { flex: none; display: grid; place-items: center; width: 204px; height: 204px; padding: 12px; border-radius: 16px; background: var(--white); }
+  .qr-box a { display: block; width: 100%; height: 100%; }
+  .qr-box img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .qr-box.empty { border: 1px dashed #c7c7cc; font-size: 11px; line-height: 1.35; color: var(--muted); text-align: center; }
   .qr p { margin: 0; }
   .qr .t { font-size: 19px; font-weight: 600; }
@@ -320,13 +321,13 @@
 
   <section class="vote gutter" id="vote">
     <h2>Your portrait. <span class="grad">Your vote.</span></h2>
-    <p class="sub">Keep the drawing. Scan the voting QR printed on the real postcard. Come sit for yours.</p>
-    <div class="ctas"><a class="pill vote-cta" id="voteLink" href="#" aria-disabled="true"><svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.6s-7.4-4.5-9.5-9.1C1 8 3.1 4.4 6.6 4.4c2.1 0 3.6 1.1 4.4 2.6.8-1.5 2.3-2.6 4.4-2.6 3.5 0 5.6 3.6 4.1 7.1-2.1 4.6-9.5 9.1-9.5 9.1z" fill="currentColor"/></svg>Vote for us</a></div>
+    <p class="sub">Support our project: tap the button or scan the QR code to vote.</p>
+    <div class="ctas"><a class="pill vote-cta" id="voteLink" href="https://docs.google.com/forms/d/e/1FAIpQLSfJP5hbfy1YjXckvsFWt17oT6-uCBH3EMtHeV0Z3vzRL0Qb9A/viewform?usp=pp_url&amp;entry.932837813=B99:+Real-Time+Robotic+Portrait+Drawing+System" target="_blank" rel="noopener noreferrer"><svg class="heart" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.6s-7.4-4.5-9.5-9.1C1 8 3.1 4.4 6.6 4.4c2.1 0 3.6 1.1 4.4 2.6.8-1.5 2.3-2.6 4.4-2.6 3.5 0 5.6 3.6 4.1 7.1-2.1 4.6-9.5 9.1-9.5 9.1z" fill="currentColor"/></svg>Vote for us</a></div>
     <div class="qr">
-      <div class="qr-box" id="qr"><a href="https://jiayueliu1208.github.io/capstone-EM-12-FFAR-020/" aria-label="Open this project website"><img src="media/site-qr.png" width="112" height="112" alt="QR code to open this project website"></a></div>
+      <div class="qr-box" id="qr"><a href="https://docs.google.com/forms/d/e/1FAIpQLSfJP5hbfy1YjXckvsFWt17oT6-uCBH3EMtHeV0Z3vzRL0Qb9A/viewform?usp=pp_url&amp;entry.932837813=B99:+Real-Time+Robotic+Portrait+Drawing+System" target="_blank" rel="noopener noreferrer" aria-label="Open the voting form for our project"><img src="media/voting-qr.jpg" width="180" height="180" alt="Voting QR code for B99: Real-Time Robotic Portrait Drawing System"></a></div>
       <div>
-        <p class="t">Scan to open this website</p>
-        <p class="url" id="siteUrl">https://jiayueliu1208.github.io/capstone-EM-12-FFAR-020/</p>
+        <p class="t">Scan to vote for us</p>
+        <p class="url">B99: Real-Time Robotic Portrait Drawing System</p>
       </div>
     </div>
   </section>
@@ -1381,8 +1382,8 @@
 })(window);
 </script>
 <script>
-  /* Set the voting URL when it is available. The website QR is a local image. */
-  const VOTE_URL = '#';
+  /* Voting form decoded from the supplied voting QR image. */
+  const VOTE_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfJP5hbfy1YjXckvsFWt17oT6-uCBH3EMtHeV0Z3vzRL0Qb9A/viewform?usp=pp_url&entry.932837813=B99:+Real-Time+Robotic+Portrait+Drawing+System';
 
   /* What the arm draws: a visitor's line portrait, the robot's own path from src/drawings/camera_path.csv
      (the second postcard in the gallery), one string of x,y pixel points per pen-down segment, in the
@@ -1594,7 +1595,7 @@
       vote.href = VOTE_URL;
       vote.removeAttribute('aria-disabled');
       vote.target = '_blank';
-      vote.rel = 'noreferrer';
+      vote.rel = 'noopener noreferrer';
     }
 
   })();

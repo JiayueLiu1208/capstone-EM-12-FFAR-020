@@ -18,12 +18,10 @@ GitHub Pages publishes from the `main` branch, repository root. `.nojekyll`
 allows the static files to be served directly. Other design variants remain
 in `src/` and can be previewed from `dist/site/` after a build.
 
-The QR image at `src/media/site-qr.png` encodes the live homepage URL above,
-including the project path and trailing slash. It is served locally and also
-works when previewing the site offline. Replace it if the public URL changes.
-
-The voting link is still pending. Set `VOTE_URL` in `src/apple.html` when the
-organisers provide the link and rebuild. The current button is disabled.
+The voting image at `src/media/voting-qr.jpg` is the supplied `Downloads/qr_code.jpg`.
+It opens the Google voting form prefilled with **B99: Real-Time Robotic Portrait
+Drawing System**. The Vote for us button opens the same form. The image is hosted
+locally and displayed in the voting section as Scan to vote for us.
 
 The 3D scene uses three.js r128 from cdnjs and falls back to the supplied 2D
 animation if WebGL or three.js is unavailable. Fonts fall back to system fonts.
